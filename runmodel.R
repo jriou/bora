@@ -141,9 +141,15 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
   res$w.eoo = w.eoo
   
   # diagnostics
-  res$conv = stan_trace(S_,pars=c("R0","rho"),inc_warmup=TRUE) + theme_bw() + 
-    labs(title="Diagnostics: MCMC chains trace plot") +
-    scale_color_discrete(guide=FALSE)
+  res$conv = cowplot::plot_grid(
+    stan_trace(S_,pars=c("R0"),inc_warmup=TRUE) + 
+    theme_bw() + 
+    labs(y=expression(R[0]),title="Trace plots") +
+    scale_color_discrete(guide=FALSE),
+    stan_trace(S_,pars=c("rho"),inc_warmup=TRUE) + 
+      theme_bw() + 
+      labs(y=expression(rho),title=" ") +
+      scale_color_discrete(guide=FALSE))
 
   # extract parameters of interest
   res$R_summarypars = summary(S_,pars=c("R0","rho","phi"))[[1]]

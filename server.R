@@ -2,6 +2,7 @@ library(shiny)
 library(dplyr)
 library(ggplot2)
 library(cowplot)
+library(xtable)
 
 function(input, output, session) {
   
@@ -129,7 +130,7 @@ function(input, output, session) {
       updateSelectInput(session,"r0disttype",selected="Exponential")
       updateNumericInput(session,"r0rate",value=0.5)
     }
-    if(input$exr0=="Prior computed from the Chikungunya virus outbreak in Martinique (2013-2015) and both Chikungunya and Zika virus outbreaks in French Polynesia (2013-2015)") {
+    if(input$exr0=="CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)") {
       updateSelectInput(session,"r0disttype",selected="Gamma")
       updateNumericInput(session,"r0mean",value=1.3)
       updateNumericInput(session,"r0sd",value=0.1)
@@ -197,7 +198,7 @@ function(input, output, session) {
       updateNumericInput(session,"rhoshape1",value=1)
       updateNumericInput(session,"rhoshape2",value=1)
     }
-    if(input$exrho=="Prior computed from the Chikungunya virus outbreak in Martinique (2013-2015) and both Chikungunya and Zika virus outbreaks in French Polynesia (2013-2015)") {
+    if(input$exrho=="CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)") {
       updateSelectInput(session,"rhodisttype",selected="Beta")
       updateNumericInput(session,"rhoshape1",value=32)
       updateNumericInput(session,"rhoshape2",value=132)
@@ -250,6 +251,17 @@ function(input, output, session) {
     R_()$conv
   })
   
+  output$plotfit = renderPlot({
+    req(R_())
+    ggplot() +
+      geom_col(data=R_()$data,aes(x=NWEEK,y=NCASES),fill=NA,colour="black",width=1) +
+      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3) +
+      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3) +
+      geom_line(data=R_()$R_fit,aes(x=NWEEK,y=mean),size=1) +
+      labs(title="Model fit",x="Weeks",y="N") +
+      theme_bw()
+  })
+  
   output$plotpost = renderPlot({
     require(cowplot)
     req(R_(),rhodistr(),r0distr())
@@ -265,38 +277,51 @@ function(input, output, session) {
       theme_bw()
   })
   
-  output$tablepost = renderTable({
+
+  output$tablepost = renderUI({
     req(R_())
-    as.data.frame(R_()$R_summarypars) %>%
-      round(.,2) %>%
-      add_rownames() %>%
-      select(-se_mean,-sd)
-  }, caption = "Posterior distributions of the main parameters",
-  caption.placement = getOption("xtable.caption.placement", "top"), 
-  caption.width = getOption("xtable.caption.width", NULL))
+    ressum = function(x,digits) {
+      c(mean=sprintf(paste0("%.",digits,"f"),x[1]),
+        CI50=paste0("[",sprintf(paste0("%.",digits,"f"),x[5]),"; ",sprintf(paste0("%.",digits,"f"),x[7]),"]"),
+        CI95=paste0("[",sprintf(paste0("%.",digits,"f"),x[4]),"; ",sprintf(paste0("%.",digits,"f"),x[8]),"]"),
+        n_eff=round(x[9]),
+        Rhat=sprintf("%.2f",x[10]))
+    }
+    ss = cbind(c("R_0","\\rho","\\phi"),
+               rbind(ressum(R_()$R_summarypars[1,],1),
+                     ressum(R_()$R_summarypars[2,],2),
+                     ressum(R_()$R_summarypars[3,],1)))
+    dimnames(ss) = list(1:3,
+                        c("Parameter","Mean","50\\%CI","95\\%CI","Eff. N","\\hat{R}"))
+    ss = print(xtable(ss,
+               align=rep("l", ncol(ss)+1),
+               captio=paste("lol")),
+               floating=FALSE, tabular.environment="array", comment=FALSE, print.results=FALSE,
+               sanitize.text.function=function(x) x ,
+               sanitize.colnames.function=function(x) x,
+               include.rownames=FALSE,
+               caption.placement = getOption("xtable.caption.placement", "top"), 
+               caption.width = getOption("xtable.caption.width", NULL))
+    list(withMathJax(HTML(ss)))
+    })
   
-  output$plotfit = renderPlot({
-    req(R_())
-    ggplot() +
-      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3) +
-      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3) +
-      geom_line(data=R_()$R_fit,aes(x=NWEEK,y=mean),size=1) +
-      geom_point(data=R_()$data,aes(x=NWEEK,y=NCASES),shape=21,size=1.5) +
-      labs(title="Model fit",x="Weeks",y="N") +
-      theme_bw()
-  })
   
   output$plotpred = renderPlot({
     req(R_())
-    linee = filter(R_()$R_pred,NWEEK==min(NWEEK))
-    pathee = rbind(R_()$R_fit,R_()$R_pred)
+    pathee = rbind(tail(R_()$R_fit,1),R_()$R_pred)
+    linee = filter(pathee,NWEEK==min(NWEEK))
     ggplot() +
-      geom_point(data=R_()$data,aes(x=NWEEK,y=NCASES)) +
-      geom_ribbon(data=R_()$R_pred,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3,fill="tomato") +
-      geom_ribbon(data=R_()$R_pred,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="tomato") +
-      geom_line(data=R_()$R_pred,aes(x=NWEEK,y=mean),size=1,colour="tomato") +
+      geom_col(data=R_()$data,aes(x=NWEEK,y=NCASES),fill=NA,colour="black",width=1) +
+      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3) +
+      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3) +
+      geom_line(data=R_()$R_fit,aes(x=NWEEK,y=mean),size=1) +
+      
+      geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3,fill="tomato") +
+      geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="tomato") +
+      geom_line(data=pathee,aes(x=NWEEK,y=mean),size=1,colour="tomato") +
+      
       geom_vline(data=linee,aes(xintercept=NWEEK),size=0.3,linetype=2) +
-      labs(title="Predicted course of the epidemic",x="Weeks",y="N") +
+      labs(title="Model fit and predicted course of the epidemic",x="Weeks",y="N") +
       theme_bw()
   })
   

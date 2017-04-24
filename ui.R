@@ -15,7 +15,7 @@ fluidPage(
                              numericInput("popsize","Size of exposed population",min=0,value=NA),
                              p("*single-column spreadsheet with the weekly numbers of observed cases")),
                 
-                mainPanel(column(10,plotOutput(outputId="plotepidcurve",width="700px",heigh="350px")))
+                mainPanel(column(10,plotOutput(outputId="plotepidcurve",width="500px",heigh="250px")))
   ),
   sidebarLayout(position="left",
                 sidebarPanel(h4("Distribution of the serial interval"),br(),
@@ -28,7 +28,7 @@ fluidPage(
                                               numericInput("simax","Maximum (in weeks)",min=0,max=15,value=NA,step=0.1)),
                              selectInput("exsi","or use a provided example",choices=c("-","Zika virus (Ae. aegypti, 28°C)","Chikungunya virus (Ae. aegypti, 28°C)"))
                 ),
-                mainPanel(column(10,plotOutput(outputId="plotsi",width="700px",heigh="350px"))
+                mainPanel(column(10,plotOutput(outputId="plotsi",width="500px",heigh="250px"))
                 )
   ),
   sidebarLayout(position="left",
@@ -42,9 +42,9 @@ fluidPage(
                                               numericInput("r0max","Maximum",min=0,max=15,value=NA,step=0.1)),
                              conditionalPanel(condition="output.r0exp==true",
                                               numericInput("r0rate","Rate",min=0,max=15,value=NA,step=0.1)),
-                             selectInput("exr0","or use a provided example",choices=c("-","Non-informative prior distribution","Prior computed from the Chikungunya virus outbreak in Martinique (2013-2015) and both Chikungunya and Zika virus outbreaks in French Polynesia (2013-2015)"))
+                             selectInput("exr0","or use a provided example",choices=c("-","Non-informative prior distribution","CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)"))
                 ),
-                mainPanel(column(10,plotOutput(outputId="plotpriorr0",width="700px",heigh="350px"))
+                mainPanel(column(10,plotOutput(outputId="plotpriorr0",width="500px",heigh="250px"))
                 )
   ),
   sidebarLayout(position="left",
@@ -56,9 +56,9 @@ fluidPage(
                              conditionalPanel(condition="output.rhobetad==true",
                                               numericInput("rhoshape1","Shape 1 (alpha)",min=0,max=10000,value=NA,step=1),
                                               numericInput("rhoshape2","Shape 2 (beta)",min=0,max=10000,value=NA,step=1)),
-                             selectInput("exrho","or use a provided example",choices=c("-","Non-informative prior distribution","Prior computed from the Chikungunya virus outbreak in Martinique (2013-2015) and both Chikungunya and Zika virus outbreaks in French Polynesia (2013-2015)"))
+                             selectInput("exrho","or use a provided example",choices=c("-","Non-informative prior distribution","CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)"))
                 ),
-                mainPanel(column(10,plotOutput(outputId="plotpriorrho",width="700px",heigh="350px"))
+                mainPanel(column(10,plotOutput(outputId="plotpriorrho",width="500px",heigh="250px"))
                 )
   ),
   sidebarLayout(position="left",
@@ -91,11 +91,11 @@ fluidPage(
                              )
                              
                 ),
-                mainPanel(plotOutput(outputId="plotconv",width="700px",heigh="350px"),
-                          plotOutput(outputId="plotpost",width="700px",heigh="350px"),
-                          tableOutput('tablepost'),
-                          plotOutput(outputId="plotfit",width="700px",heigh="350px"),
-                          plotOutput(outputId="plotpred",width="700px",heigh="350px")
+                mainPanel(plotOutput(outputId="plotconv",width="500px",heigh="250px"),
+                          # plotOutput(outputId="plotfit",width="500px",heigh="250px"),
+                          plotOutput(outputId="plotpost",width="500px",heigh="250px"),
+                          uiOutput('tablepost'),
+                          plotOutput(outputId="plotpred",width="500px",heigh="250px")
                           
                 )
   ),
