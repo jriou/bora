@@ -1,6 +1,5 @@
 library(shiny)
 library(dplyr)
-library(readr)
 library(ggplot2)
 library(cowplot)
 
@@ -18,6 +17,17 @@ function(input, output, session) {
     if(input$exdata=="Zika virus in Martinique, 2015-2017 (W1-8)") data.frame(NCASES=c(57,119,145,456,619,1069,1629,1183),NWEEK=1:8)
   })
   
+  popsize = reactive({
+    req(input$popsize)
+    input$popsize
+  })
+  
+  observe({
+    if(input$exdata=="Zika virus in Martinique, 2015-2017 (W1-8)") {
+      updateNumericInput(session,"popsize",value=385000)
+    }
+  })
+  
   ec = reactive({
     if(!is.null(exdata())) {
       exdata()
@@ -28,10 +38,10 @@ function(input, output, session) {
   
   # Plot epidemic curve
   output$plotepidcurve = renderPlot(
-      ggplot(ec()) + 
-        geom_col(aes(x=NWEEK,y=NCASES),fill="grey",colour="black",alpha=.6,width=1) + 
-        labs(title="Epidemic curve",x="Weeks",y="N") +
-        theme_bw()
+    ggplot(ec()) + 
+      geom_col(aes(x=NWEEK,y=NCASES),fill="grey",colour="black",alpha=.6,width=1) + 
+      labs(title="Epidemic curve",x="Weeks",y="N") +
+      theme_bw()
   )
   
   # Controls on serial interval distribution
@@ -84,13 +94,13 @@ function(input, output, session) {
       return(list(type="Uniform",min=input$simin,max=input$simax,ff=ff))
     }
   })
-
+  
   # Plot serial interval distribution
   output$plotsi = renderPlot(
     if(input$sidisttype!="-")
-    ggplot(sidistr()$ff) +
+      ggplot(sidistr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
-      geom_line(aes(x=x,y=prob),size=.7) +
+      geom_line(aes(x=x,y=prob),size=0.7) +
       labs(title="Distribution of the serial interval",x="Weeks",y="Density") +
       theme_bw()
   )
@@ -113,13 +123,13 @@ function(input, output, session) {
     input$r0disttype %in% c("Exponential")
   })
   outputOptions(output, "r0exp", suspendWhenHidden = FALSE) 
-
+  
   observe({
     if(input$exr0=="Non-informative prior distribution") {
       updateSelectInput(session,"r0disttype",selected="Exponential")
       updateNumericInput(session,"r0rate",value=0.5)
     }
-    if(input$exr0=="Chikungunya virus in Martinique, 2013-2015") {
+    if(input$exr0=="Prior computed from the Chikungunya virus outbreak in Martinique (2013-2015) and both Chikungunya and Zika virus outbreaks in French Polynesia (2013-2015)") {
       updateSelectInput(session,"r0disttype",selected="Gamma")
       updateNumericInput(session,"r0mean",value=1.3)
       updateNumericInput(session,"r0sd",value=0.1)
@@ -162,7 +172,7 @@ function(input, output, session) {
     if(input$r0disttype!="-")
       ggplot(r0distr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
-      geom_line(aes(x=x,y=prob),size=.7) +
+      geom_line(aes(x=x,y=prob),size=0.7) +
       labs(title="Prior distribution on the reproduction number",x=expression(R[0]),y="Density") +
       theme_bw()
   )
@@ -187,7 +197,7 @@ function(input, output, session) {
       updateNumericInput(session,"rhoshape1",value=1)
       updateNumericInput(session,"rhoshape2",value=1)
     }
-    if(input$exrho=="Chikungunya virus in Martinique, 2013-2015") {
+    if(input$exrho=="Prior computed from the Chikungunya virus outbreak in Martinique (2013-2015) and both Chikungunya and Zika virus outbreaks in French Polynesia (2013-2015)") {
       updateSelectInput(session,"rhodisttype",selected="Beta")
       updateNumericInput(session,"rhoshape1",value=32)
       updateNumericInput(session,"rhoshape2",value=132)
@@ -222,6 +232,72 @@ function(input, output, session) {
       theme_bw()
   )
   
+  # Run simulations
+  R_ <- eventReactive(input$gosim, {
+    source("runmodel.R")
+    runmodel(data=exdata(),
+             pop=popsize(),
+             si=sidistr(),
+             prior_r0=r0distr(),
+             prior_rho=rhodistr(),
+             nchains=input$nchains,nit=input$nit,nwarmup=input$nwarmup,nthin=input$nthin,
+             n.eoo=input$n.eoo,w.eoo=input$w.eoo)
+    
+  })
   
+  output$plotconv = renderPlot({
+    req(R_())
+    R_()$conv
+  })
+  
+  output$plotpost = renderPlot({
+    require(cowplot)
+    req(R_(),rhodistr(),r0distr())
+    dd = rbind(cbind(as.data.frame(do.call("cbind",R_()$R_dens_r0[c("x","y")])),type="R0"),
+               cbind(as.data.frame(do.call("cbind",R_()$R_dens_rho[c("x","y")])),type="rho"))
+    ff = rbind(cbind(r0distr()$ff,type="R0"),cbind(rhodistr()$ff,type="rho"))
+    ggplot() +
+      geom_ribbon(data=dd,aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
+      geom_line(data=dd,aes(x=x,y=y),size=.7) +
+      geom_line(data=ff,aes(x=x,y=prob),size=.7,linetype=2) +
+      facet_wrap(~type,scales="free") +
+      labs(title="Posterior distributions of the main parameters (compared to priors)",x="",y="Density") +
+      theme_bw()
+  })
+  
+  output$tablepost = renderTable({
+    req(R_())
+    as.data.frame(R_()$R_summarypars) %>%
+      round(.,2) %>%
+      add_rownames() %>%
+      select(-se_mean,-sd)
+  }, caption = "Posterior distributions of the main parameters",
+  caption.placement = getOption("xtable.caption.placement", "top"), 
+  caption.width = getOption("xtable.caption.width", NULL))
+  
+  output$plotfit = renderPlot({
+    req(R_())
+    ggplot() +
+      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3) +
+      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3) +
+      geom_line(data=R_()$R_fit,aes(x=NWEEK,y=mean),size=1) +
+      geom_point(data=R_()$data,aes(x=NWEEK,y=NCASES),shape=21,size=1.5) +
+      labs(title="Model fit",x="Weeks",y="N") +
+      theme_bw()
+  })
+  
+  output$plotpred = renderPlot({
+    req(R_())
+    linee = filter(R_()$R_pred,NWEEK==min(NWEEK))
+    pathee = rbind(R_()$R_fit,R_()$R_pred)
+    ggplot() +
+      geom_point(data=R_()$data,aes(x=NWEEK,y=NCASES)) +
+      geom_ribbon(data=R_()$R_pred,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3,fill="tomato") +
+      geom_ribbon(data=R_()$R_pred,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="tomato") +
+      geom_line(data=R_()$R_pred,aes(x=NWEEK,y=mean),size=1,colour="tomato") +
+      geom_vline(data=linee,aes(xintercept=NWEEK),size=0.3,linetype=2) +
+      labs(title="Predicted course of the epidemic",x="Weeks",y="N") +
+      theme_bw()
+  })
   
 }
