@@ -23,9 +23,15 @@ function(input, output, session) {
     input$popsize
   })
   
+  datew1 <- reactive({
+    req(input$datew1)
+    input$datew1
+  })
+  
   observe({
     if(input$exdata=="Zika virus in Martinique, 2015-2017 (W1-8)") {
       updateNumericInput(session,"popsize",value=385000)
+      updateDateInput(session,"datew1",value=as.Date("2015-12-20"))
     }
   })
   
@@ -281,11 +287,11 @@ function(input, output, session) {
   output$tablepost = renderUI({
     req(R_())
     ressum = function(x,digits) {
-      c(mean=sprintf(paste0("%.",digits,"f"),x[1]),
-        CI50=paste0("[",sprintf(paste0("%.",digits,"f"),x[5]),"; ",sprintf(paste0("%.",digits,"f"),x[7]),"]"),
-        CI95=paste0("[",sprintf(paste0("%.",digits,"f"),x[4]),"; ",sprintf(paste0("%.",digits,"f"),x[8]),"]"),
-        n_eff=round(x[9]),
-        Rhat=sprintf("%.2f",x[10]))
+      c(mean=format(round(x[1],digits),big.mark=",",nsmall=digits),
+        CI50=paste0("[",format(round(x[5],digits),big.mark=",",nsmall=digits),"; ",format(round(x[7],digits),big.mark=",",nsmall=digits),"]"),
+        CI95=paste0("[",format(round(x[4],digits),big.mark=",",nsmall=digits),"; ",format(round(x[8],digits),big.mark=",",nsmall=digits),"]"),
+        n_eff=format(round(x[9]),big.mark=",",nsmall=0),
+        Rhat=format(round(x[10],2),big.mark=",",nsmall=2))
     }
     ss = cbind(c("R_0","\\rho","\\phi"),
                rbind(ressum(R_()$R_summarypars[1,],1),
@@ -325,4 +331,32 @@ function(input, output, session) {
       theme_bw()
   })
   
+  output$tablepred = renderUI({
+    req(R_())
+    ressum = function(x,digits) {
+      c(mean=format(round(x[1],digits),big.mark=",",nsmall=digits),
+        CI50=paste0("[",format(round(x[5],digits),big.mark=",",nsmall=digits),"; ",format(round(x[7],digits),big.mark=",",nsmall=digits),"]"),
+        CI95=paste0("[",format(round(x[4],digits),big.mark=",",nsmall=digits),"; ",format(round(x[8],digits),big.mark=",",nsmall=digits),"]")
+        )
+    }
+
+    ss = cbind(c("Total \\;observed \\;cases","Total overall cases","Final attack rate"),
+               rbind(ressum(R_()$R_summarypred[1,],0),
+                     ressum(R_()$R_summarypred[2,],0),
+                     ressum(R_()$R_summarypred[3,],2),
+                     ressum(R_()$R_start,0),
+                     ressum(R_()$R_peak,0),
+                     ressum(R_()$R_end,0)
+                     )
+               )
+    dimnames(ss) = list(1:nrow(ss),
+                        c("Parameter","Mean","50\\%CI","95\\%CI"))
+    ss = print(xtable(ss,
+                      align=rep("l", ncol(ss)+1)),
+               floating=FALSE, tabular.environment="array", comment=FALSE, print.results=FALSE,
+               #sanitize.text.function=function(x) x ,
+               sanitize.colnames.function=function(x) x,
+               include.rownames=FALSE)
+    list(withMathJax(HTML(ss)))
+  })
 }

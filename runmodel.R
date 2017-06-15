@@ -153,7 +153,7 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
 
   # extract parameters of interest
   res$R_summarypars = summary(S_,pars=c("R0","rho","phi"))[[1]]
-  res$R_summarypred = summary(S_,pars=c("ptotlp","pattackrate"))[[1]]
+  res$R_summarypred = summary(S_,pars=c("ptotlp","ptotoverall","pattackrate"))[[1]]
   res$R_dens_r0 = density(extract(S_,pars="R0")[[1]])
   res$R_dens_rho = density(extract(S_,pars="rho")[[1]])
   res$R_fit = cbind(as.data.frame(summary(S_,pars="pred_lp")[[1]]),NWEEK=1:dl$W)
