@@ -47,7 +47,7 @@ function(input, output, session) {
   output$plotepidcurve = renderPlot(
     ggplot(ec()) + 
       geom_col(aes(x=NWEEK,y=NCASES),fill="grey",colour="black",alpha=.6,width=1) + 
-      labs(title="Epidemic curve",x="Weeks",y="N") +
+      labs(x="Weeks",y="N") +
       theme_bw()
   )
   
@@ -108,7 +108,7 @@ function(input, output, session) {
       ggplot(sidistr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
       geom_line(aes(x=x,y=prob),size=0.7) +
-      labs(title="Distribution of the serial interval",x="Weeks",y="Density") +
+      labs(x="Weeks",y="Density") +
       theme_bw()
   )
   
@@ -180,7 +180,7 @@ function(input, output, session) {
       ggplot(r0distr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
       geom_line(aes(x=x,y=prob),size=0.7) +
-      labs(title="Prior distribution on the reproduction number",x=expression(R[0]),y="Density") +
+      labs(x=expression(R[0]),y="Density") +
       theme_bw()
   )
   
@@ -235,7 +235,7 @@ function(input, output, session) {
       ggplot(rhodistr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
       geom_line(aes(x=x,y=prob),size=.7) +
-      labs(title="Prior distribution on the reporting rate",x=expression(rho),y="Density") +
+      labs(x=expression(rho),y="Density") +
       theme_bw()
   )
   

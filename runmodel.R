@@ -1,10 +1,16 @@
 runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.eoo,w.eoo,...) {
   # initialize
-  require(rstan);require(dplyr)
+  require(rstan);require(dplyr);require(rmarkdown)
   rstan_options(auto_write = TRUE)
   options(mc.cores = parallel::detectCores())
+  if(grepl("^darwin",tolower(Sys.info()[["sysname"]]))) {
+    load("compiled_tsir_mac.Rdata") 
+  } else if(grepl("^windows",tolower(Sys.info()[["sysname"]]))) {
+    load("compiled_tsir_windows.Rdata")
+  } else {
+    M_ = stan_model(file="TSIR_model.stan",model_name="tsir_stan")
+  } 
   ResampleThreshold = 1.05
-  load("compiled_tsir.Rdata")
   
   # manage data
   data2 = mutate(data,
@@ -96,7 +102,7 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
       dl$P_rho = c(prior_rho$min,prior_rho$max)
     }
   }
-  
+
   # run model
   S_ = sampling(object=M_,
                 data=dl,
@@ -148,18 +154,18 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
   res$acf1 = stan_ac(S_,pars=c("R0")) 
   res$acf2 = stan_ac(S_,pars=c("rho"))
   res$acf3 = stan_ac(S_,pars=c("phi"))
-
+  
   # extract parameters of interest
   res$R_summarypars = summary(S_,pars=c("R0","rho","phi"))[[1]]
   res$R_summarypred = summary(S_,pars=c("ptotlp","ptotoverall","pattackrate"))[[1]]
-  res$R_dens_r0 = density(extract(S_,pars="R0")[[1]])
-  res$R_dens_rho = density(extract(S_,pars="rho")[[1]],from=0,to=1)
-  res$R_dens_phi = density(extract(S_,pars="phi")[[1]])
+  res$R_dens_r0 = density(rstan::extract(S_,pars="R0")[[1]])
+  res$R_dens_rho = density(rstan::extract(S_,pars="rho")[[1]],from=0,to=1)
+  res$R_dens_phi = density(rstan::extract(S_,pars="phi")[[1]])
   res$R_fit = cbind(as.data.frame(summary(S_,pars="pred_lp")[[1]]),NWEEK=1:dl$W)
   res$R_resid = cbind(as.data.frame(summary(S_,pars="resid_lp")[[1]]),NWEEK=1:dl$W)
-
+  
   # compute predicted epidemic curve
-  tmppred = extract(S_,pars="pO")[[1]]
+  tmppred = rstan::extract(S_,pars="pO")[[1]]
   tmpdate = 1:ncol(tmppred) + dim(res$R_fit)[1]
   tmpmean = apply(tmppred,2,mean)
   tmpdelta = abs(sweep(tmppred,2,tmpmean))
@@ -175,22 +181,32 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
                           n_eff=NA,Rhat=NA,NWEEK=tmpdate)
   res$R_pred = filter(res$R_pred,X97.5.>0)
   names(res$R_pred) = c("mean","se_mean","sd","2.5%","25%","50%","75%","97.5%","n_eff","Rhat","NWEEK")
-  
+
   # compute time predictions
-  tmp = do.call("cbind",extract(S_,pars=c("pred_lp","pO"))) %>%
+  tmpmax = do.call("cbind",rstan::extract(S_,pars=c("lp","pO"))) %>%
+    apply(.,1,max)
+  res$R_max = round(c(mean=mean(tmpmax),se_mean=sd(tmpmax)/length(tmpmax),sd=sd(tmpmax),quantile(tmpmax,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
+  
+  tmpwhichmax = do.call("cbind",rstan::extract(S_,pars=c("lp","pO"))) %>%
     apply(.,1,which.max) 
-  res$R_peak = round(c(mean=mean(tmp),se_mean=sd(tmp)/length(tmp),sd=sd(tmp),quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
-  tmp = do.call("cbind",extract(S_,pars=c("pred_lp","pO"))) %>%
+  res$R_peak = round(c(mean=mean(tmpwhichmax),se_mean=sd(tmpwhichmax)/length(tmpwhichmax),sd=sd(tmpwhichmax),quantile(tmpwhichmax,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
+  
+  tmpstart = do.call("cbind",rstan::extract(S_,pars=c("lp","pO"))) %>%
     apply(.,1,function(x) which(cumsum(x>n.eoo)==w.eoo)) %>%
     unlist()
-  res$R_start = round(c(mean=mean(tmp),se_mean=sd(tmp)/length(tmp),sd=sd(tmp),quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
-  tmp = do.call("cbind",extract(S_,pars=c("pred_lp","pO")))
-  tmp = unlist(lapply(1:dim(tmp)[[1]], function(i) {
-    y = tmp[i,]
+  res$R_start = round(c(mean=mean(tmpstart),se_mean=sd(tmpstart)/length(tmpstart),sd=sd(tmpstart),quantile(tmpstart,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
+  
+  tmpend = do.call("cbind",rstan::extract(S_,pars=c("lp","pO")))
+  tmpend = unlist(lapply(1:dim(tmpend)[[1]], function(i) {
+    y = tmpend[i,]
     y[1:which.max(y)] <- max(y)
     return(which(cumsum(y<n.eoo)==w.eoo))
   }))
-  res$R_end = round(c(mean=mean(tmp),se_mean=sd(tmp)/length(tmp),sd=sd(tmp),quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
+  res$R_end = round(c(mean=mean(tmpend),se_mean=sd(tmpend)/length(tmpend),sd=sd(tmpend),quantile(tmpend,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
   
+  # render rmarkdown report
+  fit = res
+  save(fit,file="fit.Rdata")
+  rmarkdown::render("report.Rmd",output_format=c("pdf_document","html_document","word_document"))
   return(res)
 }

@@ -8,7 +8,7 @@ toc: yes
 bibliography: bibliography.bib
 ---
 
-```{r, include = F}
+```{r controls, include = F}
 require(ggplot2);require(dplyr);require(tidyr);library(cowplot)
 library(bookdown);library(knitr)
 
@@ -55,8 +55,8 @@ g1 = ggplot(fit$data) +
   labs(x="Weeks",y="Incidence") +
   scale_y_continuous(expand=c(0,0)) +
   theme_cowplot() +
-  theme(axis.title=element_text(size=10),
-        axis.text=element_text(size=10))
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
 
 # Serial interval
 if(fit$si$type=="Normal") {
@@ -83,8 +83,8 @@ g2 = ggplot(sidistr$ff) +
   scale_y_continuous(expand=c(0,0),limits=c(0,max(sidistr$ff$prob)*1.1)) +
   scale_x_continuous(expand=c(0,0)) +
   theme_cowplot() +
-  theme(axis.title=element_text(size=10),
-        axis.text=element_text(size=10))
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
 
 # Prior distribution on R_0
 if(fit$prior_r0$type=="Uniform") {
@@ -115,8 +115,8 @@ g3 = ggplot(r0distr$ff) +
   scale_y_continuous(expand=c(0,0),limits=c(0,max(r0distr$ff$prob)*1.1)) +
   scale_x_continuous(expand=c(0,0)) +
   theme_cowplot() +
-  theme(axis.title=element_text(size=10),
-        axis.text=element_text(size=10))
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
 
 # prior on rho
 if(fit$prior_rho$type=="Uniform") {
@@ -136,8 +136,8 @@ g4 = ggplot(rhodistr$ff) +
   scale_y_continuous(expand=c(0,0),limits=c(0,max(rhodistr$ff$prob)*1.1)) +
   scale_x_continuous(expand=c(0,0)) +
   theme_cowplot() +
-  theme(axis.title=element_text(size=10),
-        axis.text=element_text(size=10))
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
 
 
 plot_grid(g1,g2,g3,g4,labels=c("A","B","C","D"),ncol=2)
@@ -273,7 +273,7 @@ f2 = ggplot() +
 plot_grid(f1,f2,labels=c("A","B"))
 ```
 
-From the posterior estimates on $R_0$, $\rho$ and $\phi$ and the observed incidence, the future incidence of the outbreak was forecasted for the 104 following weeks. The forecast was based on a simulation of __`r fit$nchains*(fit$nit-fit$nwarmup)`__ stochastic epidemic trajectories. The mean predicted trajectory as well as the 50% and 95% prediction are presented in Fig. 4.
+From the posterior distributions of $R_0$, $\rho$ and $\phi$ and observed incidence, the future weekly incidence of the outbreak was forecasted for the  two following years. The forecasts were based on __`r fit$nchains*(fit$nit-fit$nwarmup)`__ stochastic simulations of the epidemic. The mean predicted trajectory as well as the 50% and 95% prediction are presented in Fig. 4.
 
 
 ```{r fig4,fig.height=3.5, fig.width=4.5,fig.cap="Predicted course of the epidemic from stochastic simulations (mean, 50\\% and 95\\% prediction intervals)"}
@@ -297,30 +297,46 @@ ggplot() +
 
 ## Public health indicators
 
-Several indicators of direct operationnal value were computed from the simulated epidemic trajectories.
+Several indicators of direct operationnal value were computed from the simulated epidemic trajectories (Table 2):
 
-```{r}
-ressum = function(x,digits) {
-  c(mean=format(round(x[1],digits),big.mark=",",nsmall=digits),
-    CI50=paste0("[",format(round(x[5],digits),big.mark=",",nsmall=digits),"; ",format(round(x[7],digits),big.mark=",",nsmall=digits),"]"),
-    CI95=paste0("[",format(round(x[4],digits),big.mark=",",nsmall=digits),"; ",format(round(x[8],digits),big.mark=",",nsmall=digits),"]")
-  )
-}
+* the expected total number of reported clinical cases during the epidemic;
 
-ss = cbind(c("Total \\;observed \\;cases","Total overall cases","Final attack rate",""),
-           rbind(ressum(fit$R_summarypred[1,],0),
-                 ressum(fit$R_summarypred[2,],0),
-                 ressum(fit$R_summarypred[3,],2),
-                 ressum(fit$R_start,0),
-                 ressum(fit$R_peak,0),
-                 ressum(fit$R_end,0)
-           )
-)
-dimnames(ss) = list(1:nrow(ss),
-                    c("Parameter","Mean","50\\%CI","95\\%CI"))
-ss
+* the expected maximal weekly number of reported clinical cases at any point of the epidemic;
+
+* the expected final attack rate (including unreported cases).
+
+
+In addition were also computed some predictions about the dynamics of the epidemic (Table 3):
+
+* the exepcted date of peak incidence;
+
+* the expected date of the end of the epidemic phase (defined as the week number __`r fit$w.eoo`__ under a threshold of __`r fit$n.eoo`__).
+
+
+```{r tab2, results="asis"}
+ptotlp = format(round(fit$R_summarypred[1,c(1,4:8)]),big.mark=",")
+pattackrate = format(round(fit$R_summarypred[3,c(1,4:8)],2))
+maxinc = format(round(fit$R_max[c(1,4:8)]),big.mark=",")
+
+mm = rbind(ptotlp,maxinc,pattackrate)
+dimnames(mm)[[1]] = c("Expected total clinical cases","Expected maximal weekly clinical cases","Expected final attack rate")
+dimnames(mm)[[2]] = c("Mean","2.5%","25%","50%","75%","97.5%")
+
+kable(mm,caption="Forecasted indicators.",escape=F)
+
 ```
 
 
+```{r tab3, results="asis"}
+peak = round(fit$R_peak[c(1,4:8)])
+end = round(fit$R_end[c(1,4:8)])
+
+mm = rbind(peak,end)
+dimnames(mm)[[1]] = c("Expected date of peak incidence","Expected date of the end of the epidemic phase")
+dimnames(mm)[[2]] = c("Mean","2.5%","25%","50%","75%","97.5%")
+
+kable(mm,caption="Forecasted dynamics (in weeks after the first reported cases)",escape=F)
+
+```
 
 # References
