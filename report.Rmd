@@ -1,0 +1,326 @@
+---
+title: "Outbreak risk assessment and forecast using BORAT"
+author: "Bayesian Outbreak Risk Assessment Tool"
+date: "`r format(Sys.time(), '%B %e, %Y, %H:%M')`"
+output: pdf_document
+fig_caption: yes
+toc: yes
+bibliography: bibliography.bib
+---
+
+```{r, include = F}
+require(ggplot2);require(dplyr);require(tidyr);library(cowplot)
+library(bookdown);library(knitr)
+
+## Set options
+knitr::opts_chunk$set(echo = F,warning = F,message = F)
+options(scipen = 999, stringsAsFactors = F)
+
+## Pull in the data
+load("fit.Rdata")
+```
+
+
+# Settings and methodological aspects
+
+The analysis is based on a time-dependent susceptible-infectious-recovered (TSIR) model composed of two elements: (1) the distribution of the serial interval of the disease; and (2) a statistical model for the generation of observed secondary cases involving two main parameters: the basic reproduction number $R_0$ and the reporting rate $\rho$. Fitting this model to weekly incidence data allows the estimation of these two parameters, which in turn will be used to stochastically simulate future incidence. From these simulations, several indicators of direct operational interest are then computed.
+
+The main feature of BORAT concerns the choice of prior distributions for these two parameters. The concept of prior distribution in the context of Bayesian inference relates to the need for expressing the entirety of our knowledge (and uncertainty) about a parameter to be estimated, prior to the estimation itself [@gelman2014bayesian]. Using informative prior distributions (as opposed to non-informative prior distributions, where all the information on the parameter comes from the data alone) has been shown to improve the quality of the forecasts, especially in the initial phase of an outbreak, where incidence data is scarce [@riou2017comparative].
+
+
+
+
+## Incidence data
+
+Incidence data is used in conjonction with the priors to estimate the posterior distributions of the parameters. The main assumptions are that (1) imported cases are negligible when compared to autochtonous cases; (2) the reporting rate is stable during the period of interest. 
+
+
+During the __`r length(fit$data$NWEEK)`__ weeks of the period chosen for the analysis, a total of __`r format(sum(fit$data$NCASES), big.mark=",")`__ cases were reported, which corresponds to __`r paste0(round(100*sum(fit$data$NCASES)/fit$pop,1),"%")`__ of a  population of size __`r format(fit$pop, big.mark=",")`__ (Fig. 1A).
+
+
+
+## Serial interval distribution
+
+The serial interval is the time interval between disease onset in a primary and secondary case, and is a key component of TSIR-type models [@svensson_note_2007]. As such, it depends heavily on the mechanisms of interhuman transmission, and generally includes the durations of the infectious period and of the latent period. It can be measured from contact-tracing data when available, or reconstructed from known transmission mechanisms (e.g. in the case of vector-transmitted diseases). 
+
+
+For this analysis, the serial interval followed a __`r tolower(fit$si$type)`__ distribution with mean __`r fit$si$mean`__ weeks and standard deviation __`r fit$si$sd`__ (Fig. 1B).
+
+
+
+```{r fig1, fig.height=3.5, fig.width=4.5,fig.cap="Summary of the user-defined settings: (A) incidence data (weekly number of reported cases; (B) distribution of the serial interval (in weeks); (C) prior distribution on $R_0$; and (D) prior distribution on $\\rho$."}
+# Incidence data
+g1 = ggplot(fit$data) + 
+  geom_col(aes(x=NWEEK,y=NCASES),fill="grey",colour="black",alpha=.6,width=1) + 
+  labs(x="Weeks",y="Incidence") +
+  scale_y_continuous(expand=c(0,0)) +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=10),
+        axis.text=element_text(size=10))
+
+# Serial interval
+if(fit$si$type=="Normal") {
+  ff = data.frame(x=seq(0,fit$si$mean+5*fit$si$sd,by=0.001))
+  ff$prob = dnorm(ff$x,mean=fit$si$mean,sd=fit$si$sd)
+  ff$prob = ff$prob/sum(ff$prob)
+  sidistr = list(type="Normal",mean=fit$si$mean,sd=fit$si$sd,ff=ff)
+}
+if(fit$si$type=="Gamma") {
+  ff = data.frame(x=seq(0,fit$si$mean+5*fit$si$sd,by=0.001))
+  ff$prob = dgamma(ff$x,rate=fit$si$mean/(fit$si$sd^2),shape=(fit$si$mean^2)/(fit$si$sd^2))
+  sidistr = list(type="Gamma",mean=fit$si$mean,sd=fit$si$sd,rate=fit$si$mean/(fit$si$sd^2),shape=(fit$si$mean^2)/(fit$si$sd^2),ff=ff)
+}
+if(fit$si$type=="Uniform") {
+  req(fit$si$min,fit$si$max)
+  ff = data.frame(x=seq(0,fit$si$max*1.1,by=0.001))
+  ff$prob = dunif(ff$x,min=fit$si$min,max=fit$si$max)
+  sidistr = list(type="Uniform",min=fit$si$min,max=fit$si$max,ff=ff)
+}
+g2 = ggplot(sidistr$ff) +
+  geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
+  geom_line(aes(x=x,y=prob),size=0.7) +
+  labs(x="Serial interval (weeks)",y="Density") +
+  scale_y_continuous(expand=c(0,0),limits=c(0,max(sidistr$ff$prob)*1.1)) +
+  scale_x_continuous(expand=c(0,0)) +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=10),
+        axis.text=element_text(size=10))
+
+# Prior distribution on R_0
+if(fit$prior_r0$type=="Uniform") {
+  ff = data.frame(x=seq(0,fit$prior_r0$max*1.1,by=0.001))
+  ff$prob = dunif(ff$x,min=fit$prior_r0$min,max=fit$prior_r0$max)
+  r0distr = list(type="Uniform",min=fit$prior_r0$min,max=fit$prior_r0$max,ff=ff)
+}
+if(fit$prior_r0$type=="Exponential") {
+  ff = data.frame(x=seq(0,2.5/fit$prior_r0$rate,by=0.001))
+  ff$prob = dexp(ff$x,rate=fit$prior_r0$rate)
+  r0distr = list(type="Exponential",rate=fit$prior_r0$rate,ff=ff)
+}
+if(fit$prior_r0$type=="Normal") {
+  ff = data.frame(x=seq(0,fit$prior_r0$mean+5*fit$prior_r0$sd,by=0.001))
+  ff$prob = dnorm(ff$x,mean=fit$prior_r0$mean,sd=fit$prior_r0$sd)
+  ff$prob = ff$prob/sum(ff$prob)
+  r0distr = list(type="Normal",mean=fit$prior_r0$mean,sd=fit$prior_r0$sd,ff=ff)
+}
+if(fit$prior_r0$type=="Gamma") {
+  ff = data.frame(x=seq(0,fit$prior_r0$mean+5*fit$prior_r0$sd,by=0.001))
+  ff$prob = dgamma(ff$x,rate=fit$prior_r0$mean/(fit$prior_r0$sd^2),shape=(fit$prior_r0$mean^2)/(fit$prior_r0$sd^2))
+  r0distr = list(type="Gamma",mean=fit$prior_r0$mean,sd=fit$prior_r0$sd,rate=fit$prior_r0$mean/(fit$prior_r0$sd^2),shape=(fit$prior_r0$mean^2)/(fit$prior_r0$sd^2),ff=ff)
+}
+g3 = ggplot(r0distr$ff) +
+  geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
+  geom_line(aes(x=x,y=prob),size=0.7) +
+  labs(x=expression(R[0]),y="Density") +
+  scale_y_continuous(expand=c(0,0),limits=c(0,max(r0distr$ff$prob)*1.1)) +
+  scale_x_continuous(expand=c(0,0)) +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=10),
+        axis.text=element_text(size=10))
+
+# prior on rho
+if(fit$prior_rho$type=="Uniform") {
+  ff = data.frame(x=seq(0,1,by=0.001))
+  ff$prob = dunif(ff$x,min=fit$prior_rho$min,max=fit$prior_rho$max)
+  rhodistr = list(type="Uniform",min=fit$prior_rho$min,max=fit$prior_rho$max,ff=ff)
+}
+if(fit$prior_rho$type=="Beta") {
+  ff = data.frame(x=seq(0,1,by=0.001))
+  ff$prob = dbeta(ff$x,shape1=fit$prior_rho$shape1,shape2=fit$prior_rho$shape2)
+  rhodistr = list(type="Beta",shape1=fit$prior_rho$shape1,shape2=fit$prior_rho$shape2,ff=ff)
+}
+g4 = ggplot(rhodistr$ff) +
+  geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
+  geom_line(aes(x=x,y=prob),size=.7) +
+  labs(x=expression(rho),y="Density") +
+  scale_y_continuous(expand=c(0,0),limits=c(0,max(rhodistr$ff$prob)*1.1)) +
+  scale_x_continuous(expand=c(0,0)) +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=10),
+        axis.text=element_text(size=10))
+
+
+plot_grid(g1,g2,g3,g4,labels=c("A","B","C","D"),ncol=2)
+
+```
+
+## Prior distribution on $R_0$
+
+Interhuman transmissibility is generally measured by the basic reproduction number $R_0$, which represents the expected number of secondary cases per index case in a fully susceptible population (i.e. which is particularly relevant at the initial stage of an emerging infection). $R_0$ is stricly positive, and when $R_0>1$, the infection will be able to spread in a population. Transmissibility depends on many intricated factors  on the mechanisms of transmission, that generally include the mixing of the population (i.e. the chance of exposition of susceptible indiduals), and the probability of infection when exposed. These mechanisms must be taken into account when considering the use of historical data to inform on the new epidemic. 
+
+For this analysis, a __`r tolower(fit$prior_r0$type)`__ distribution with mean __`r fit$prior_r0$mean`__ and standard deviation __`r fit$prior_r0$sd`__ was chosen as the prior distribution of $R_0$ (Fig. 1C).
+
+## Prior distribution on $\rho$
+
+The reporting rate represents the probability that an infected individual has symptoms, seeks care, is identified as infected, and is subsequently reported to the surveillance authorities. These mechanisms must be taken into account when considering the use of historical data to inform on the new epidemic. 
+
+For this analysis, a __`r tolower(fit$prior_rho$type)`__ distribution with parameters __`r fit$prior_rho[[2]]`__ and __`r fit$prior_rho[[3]]`__ was chosen as the prior distribution of $\rho$ (Fig. 1D).
+
+
+# Results
+
+## Diagnostics
+
+The model was fit with the Stan probabilitic language, which uses Hamiltonian Monte Carlo (HMC) methods [@carpenter2015stan]. There were __`r fit$nchains`__ chains with __`r fit$nit`__ iterations each, including a burn-in of __`r fit$nwarmup`__ iterations. A thinning ratio of __`r paste0("1:",fit$nthin)`__ was applied. A basic approach to detect the most common problems with the estimation process is to check three things:
+
+* the chains are well mixed after warm-up, i.e. all of them converge to the same range of values (Fig. 2A-C)
+
+* there is low autocorrelation, i.e. the correlation between successive iterations is weak (Fig. 2D-F)
+
+* the Gelman-Rubin convergence indicator $\hat{R}$ is close to 1 and lower than 1.05 (Fig. 2G and Table 1)
+
+It is also good practice to interpret the results with regards to the quality of the model fit (Fig. 2H).
+
+```{r fig2, fig.height=5, fig.width=7,fig.cap="Post-estimation diagnostics: (A-C) trace plots of the three parameters of the model; (D-F) autocorrelation (AC) plots; (G) Gelman-Rubin Rhat; (H) model fit (mean and 50\\% and 95\\% confidence intervals)."}
+f1 = plot_grid(fit$trace1 + scale_colour_discrete(guide=FALSE) + labs(x="Iterations") +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$trace2 + scale_colour_discrete(guide=FALSE) + labs(x="Iterations") +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$trace3 + scale_colour_discrete(guide=FALSE) + labs(x="Iterations") +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               ncol=3,
+               labels=c("A","B","C"))
+
+rhat = as.data.frame(fit$R_summarypars) %>%
+  add_rownames() %>%
+  ggplot(.) +
+  geom_vline(aes(xintercept=c(1,1.05,1.1)),linetype=2,size=.5) +
+  geom_segment(aes(x=1,xend=Rhat,y=rowname,yend=rowname)) +
+  geom_point(aes(x=Rhat,y=rowname),size=2,shape=21,fill="skyblue") +
+  scale_y_discrete(labels=c(expression(phi),expression(R[0]),expression(rho))) +
+  scale_x_continuous(breaks=c(1,1.05,1.1)) +
+  labs(x="Rhat",y="",title=NULL)
+
+
+f2 = plot_grid(fit$acf1 + 
+                 theme_cowplot() +
+                 labs(title=NULL,y=expression(paste("AC  (",R[0],")"))) +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$acf2 + 
+                 theme_cowplot() +
+                 labs(title=NULL,y=expression(paste("AC (",rho,")"))) +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$acf3 + 
+                 theme_cowplot() +
+                 labs(title=NULL,y=expression(paste("AC (",phi,")"))) +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               rhat + 
+                 theme_cowplot() +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               ncol=2,
+               labels=c("D","E","F","G"))
+f3 = plot_grid(f2,
+               ggplot() +
+                 geom_ribbon(data=fit$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.4,fill="skyblue") +
+                 geom_ribbon(data=fit$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="skyblue") +
+                 geom_point(data=fit$data,aes(x=NWEEK,y=NCASES),shape=1,colour="black") +
+                 geom_line(data=fit$R_fit,aes(x=NWEEK,y=mean),size=1) +
+                 labs(x="Weeks",y="N") +
+                 scale_y_continuous(expand=c(0,0),limits=c(0,max(fit$R_fit[["97.5%"]])*1.1)) +
+                 theme_cowplot() +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               labels=c("","H"))
+
+plot_grid(f1,f3,ncol=1,rel_heights = c(1,1.6))
+
+```
+
+
+
+## Parameter estimates and forward simulations
+
+If no particular issue is detected in the diagnostics, the results are useable. Table 1 presents the posterior distributions obtained for the three parameters of the model. The difference between the prior and the posterior distribution can be assessed in Fig. 3.
+
+```{r tab1, results="asis"}
+nn = cbind(round(fit$R_summarypars[,c(1,3:9)],1),
+           round(fit$R_summarypars[,c(10)],3))
+dimnames(nn)[[1]] = c("$R_0$","$\\rho$","$\\phi$")
+dimnames(nn)[[2]] = c("Mean","SD","2.5%","25%","50%","75%","97.5%","Eff. n","$\\hat{R}$")
+kable(nn,caption="Posterior distributions of the parameters (Eff. n means effective sample size; $\\hat{R}$ means the Gelman-Rubin convergence diagnostic)",escape=F)
+```
+
+
+```{r fig3, fig.height=2.5, fig.width=5,fig.cap="Posterior distributions for $R_0$ (panel A) and $\\rho$ (panel B). The dashed lines represent the corresponding prior distributions."}
+dd = rbind(cbind(as.data.frame(do.call("cbind",fit$R_dens_r0[c("x","y")])),type="R0"),
+           cbind(as.data.frame(do.call("cbind",fit$R_dens_rho[c("x","y")])),type="rho"))
+ff = rbind(cbind(r0distr$ff,type="R0"),cbind(rhodistr$ff,type="rho"))
+f1 = ggplot() +
+  geom_ribbon(data=filter(dd,type=="R0"),aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
+  geom_line(data=filter(dd,type=="R0"),aes(x=x,y=y),size=.7) +
+  geom_line(data=filter(ff,type=="R0"),aes(x=x,y=prob),size=.7,linetype=2) +
+  scale_y_continuous(expand=c(0,0)) +
+  labs(title=NULL,x=expression(R[0]),y="Density") +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
+f2 = ggplot() +
+  geom_ribbon(data=filter(dd,type=="rho"),aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
+  geom_line(data=filter(dd,type=="rho"),aes(x=x,y=y),size=.7) +
+  geom_line(data=rhodistr$ff,aes(x=x,y=prob),size=.7,linetype=2) +
+  scale_y_continuous(expand=c(0,0)) +
+  labs(title=NULL,x=expression(rho),y="Density") +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
+plot_grid(f1,f2,labels=c("A","B"))
+```
+
+From the posterior estimates on $R_0$, $\rho$ and $\phi$ and the observed incidence, the future incidence of the outbreak was forecasted for the 104 following weeks. The forecast was based on a simulation of __`r fit$nchains*(fit$nit-fit$nwarmup)`__ stochastic epidemic trajectories. The mean predicted trajectory as well as the 50% and 95% prediction are presented in Fig. 4.
+
+
+```{r fig4,fig.height=3.5, fig.width=4.5,fig.cap="Predicted course of the epidemic from stochastic simulations (mean, 50\\% and 95\\% prediction intervals)"}
+pathee = rbind(tail(fit$R_fit,1),fit$R_pred)
+linee = filter(pathee,NWEEK==min(NWEEK))
+ggplot() +
+  geom_col(data=fit$data,aes(x=NWEEK,y=NCASES),fill=NA,colour="black",width=1) +
+  
+  geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3,fill="tomato") +
+  geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="tomato") +
+  geom_line(data=pathee,aes(x=NWEEK,y=mean),size=1,colour="tomato") +
+  
+  geom_vline(data=linee,aes(xintercept=NWEEK),size=0.3,linetype=2) +
+  scale_y_continuous(expand=c(0,0) ) +
+  labs(x="Weeks",y="N") +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
+```
+
+
+## Public health indicators
+
+Several indicators of direct operationnal value were computed from the simulated epidemic trajectories.
+
+```{r}
+ressum = function(x,digits) {
+  c(mean=format(round(x[1],digits),big.mark=",",nsmall=digits),
+    CI50=paste0("[",format(round(x[5],digits),big.mark=",",nsmall=digits),"; ",format(round(x[7],digits),big.mark=",",nsmall=digits),"]"),
+    CI95=paste0("[",format(round(x[4],digits),big.mark=",",nsmall=digits),"; ",format(round(x[8],digits),big.mark=",",nsmall=digits),"]")
+  )
+}
+
+ss = cbind(c("Total \\;observed \\;cases","Total overall cases","Final attack rate",""),
+           rbind(ressum(fit$R_summarypred[1,],0),
+                 ressum(fit$R_summarypred[2,],0),
+                 ressum(fit$R_summarypred[3,],2),
+                 ressum(fit$R_start,0),
+                 ressum(fit$R_peak,0),
+                 ressum(fit$R_end,0)
+           )
+)
+dimnames(ss) = list(1:nrow(ss),
+                    c("Parameter","Mean","50\\%CI","95\\%CI"))
+ss
+```
+
+
+
+# References

@@ -104,14 +104,12 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
                 iter=nit,
                 warmup=nwarmup,
                 thin=nthin,
-                sample_file="sampling",
-                diagnostic_file="diagnostic",
                 algorithm="NUTS")
   
   # check convergence (with Rhat<1.05) and resample with more iterations if not converged
   maxrhat <- max(summary(S_,pars=c("R0","rho","phi"))[[1]][,"Rhat"])
   nresample = 0
-  while(maxrhat>1.05 & nresample<6) {
+  while(maxrhat>ResampleThreshold & nresample<6) {
     S_ = sampling(object=M_,
                   data=dl,
                   chains=nchains,
@@ -141,21 +139,22 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
   res$w.eoo = w.eoo
   
   # diagnostics
-  res$conv = cowplot::plot_grid(
-    stan_trace(S_,pars=c("R0"),inc_warmup=TRUE) + 
-    theme_bw() + 
-    labs(y=expression(R[0]),title="Trace plots") +
-    scale_color_discrete(guide=FALSE),
-    stan_trace(S_,pars=c("rho"),inc_warmup=TRUE) + 
-      theme_bw() + 
-      labs(y=expression(rho),title=" ") +
-      scale_color_discrete(guide=FALSE))
+  res$trace1 = stan_trace(S_,pars=c("R0"),inc_warmup=FALSE) + 
+    labs(y=expression(R[0]))
+  res$trace2 = stan_trace(S_,pars=c("rho"),inc_warmup=FALSE) + 
+    labs(y=expression(rho))
+  res$trace3 = stan_trace(S_,pars=c("phi"),inc_warmup=FALSE) + 
+    labs(y=expression(phi))
+  res$acf1 = stan_ac(S_,pars=c("R0")) 
+  res$acf2 = stan_ac(S_,pars=c("rho"))
+  res$acf3 = stan_ac(S_,pars=c("phi"))
 
   # extract parameters of interest
   res$R_summarypars = summary(S_,pars=c("R0","rho","phi"))[[1]]
   res$R_summarypred = summary(S_,pars=c("ptotlp","ptotoverall","pattackrate"))[[1]]
   res$R_dens_r0 = density(extract(S_,pars="R0")[[1]])
-  res$R_dens_rho = density(extract(S_,pars="rho")[[1]])
+  res$R_dens_rho = density(extract(S_,pars="rho")[[1]],from=0,to=1)
+  res$R_dens_phi = density(extract(S_,pars="phi")[[1]])
   res$R_fit = cbind(as.data.frame(summary(S_,pars="pred_lp")[[1]]),NWEEK=1:dl$W)
   res$R_resid = cbind(as.data.frame(summary(S_,pars="resid_lp")[[1]]),NWEEK=1:dl$W)
 
