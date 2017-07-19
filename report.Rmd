@@ -2,19 +2,19 @@
 title: "Outbreak risk assessment and forecast using BORAT"
 author: "Bayesian Outbreak Risk Assessment Tool"
 date: "`r format(Sys.time(), '%B %e, %Y, %H:%M')`"
-output: pdf_document
-fig_caption: yes
-toc: yes
-bibliography: bibliography.bib
+output: html_document
 ---
 
-```{r controls, include = F}
+
+```{r controls, include = FALSE}
 require(ggplot2);require(dplyr);require(tidyr);library(cowplot)
-library(bookdown);library(knitr)
+library(knitr)
+opts_knit$set(eval.after = 'fig.cap')
+
 
 ## Set options
-knitr::opts_chunk$set(echo = F,warning = F,message = F)
-options(scipen = 999, stringsAsFactors = F)
+knitr::opts_chunk$set(echo = FALSE,warning = FALSE,message = FALSE)
+options(scipen = 999, stringsAsFactors = FALSE)
 
 ## Pull in the data
 load("fit.Rdata")
@@ -244,11 +244,11 @@ nn = cbind(round(fit$R_summarypars[,c(1,3:9)],1),
            round(fit$R_summarypars[,c(10)],3))
 dimnames(nn)[[1]] = c("$R_0$","$\\rho$","$\\phi$")
 dimnames(nn)[[2]] = c("Mean","SD","2.5%","25%","50%","75%","97.5%","Eff. n","$\\hat{R}$")
-kable(nn,caption="Posterior distributions of the parameters (Eff. n means effective sample size; $\\hat{R}$ means the Gelman-Rubin convergence diagnostic)",escape=F)
+kable(nn,caption="Posterior distributions of the parameters (\\textit{Eff. n} means effective sample size; $\\hat{R}$ means the Gelman-Rubin convergence diagnostic)",escape=F)
 ```
 
 
-```{r fig3, fig.height=2.5, fig.width=5,fig.cap="Posterior distributions for $R_0$ (panel A) and $\\rho$ (panel B). The dashed lines represent the corresponding prior distributions."}
+```{r fig3, fig.height=2, fig.width=4,fig.cap="Posterior distributions for $R_0$ (panel A) and $\\rho$ (panel B). The dashed lines represent the corresponding prior distributions."}
 dd = rbind(cbind(as.data.frame(do.call("cbind",fit$R_dens_r0[c("x","y")])),type="R0"),
            cbind(as.data.frame(do.call("cbind",fit$R_dens_rho[c("x","y")])),type="rho"))
 ff = rbind(cbind(r0distr$ff,type="R0"),cbind(rhodistr$ff,type="rho"))
@@ -299,44 +299,32 @@ ggplot() +
 
 Several indicators of direct operationnal value were computed from the simulated epidemic trajectories (Table 2):
 
-* the expected total number of reported clinical cases during the epidemic;
+* the epidemic size (i.e. the total number of clinical cases during the epidemic);
 
-* the expected maximal weekly number of reported clinical cases at any point of the epidemic;
-
-* the expected final attack rate (including unreported cases).
+* the maximal weekly incidence (from the 95% prediction band);
 
 
-In addition were also computed some predictions about the dynamics of the epidemic (Table 3):
+In addition were also computed some predictions about the dynamics of the epidemic (with dates expressed as a number of weeks after the first reports):
 
-* the exepcted date of peak incidence;
+* the date of peak incidence (i.e. the week with the largest number of clinical cases);
 
-* the expected date of the end of the epidemic phase (defined as the week number __`r fit$w.eoo`__ under a threshold of __`r fit$n.eoo`__).
+* the date end of the period of high epidemic activity (i.e. defined after __`r fit$w.eoo`__ consecutive weeks under a threshold of __`r fit$n.eoo`__ clinical cases).
+
 
 
 ```{r tab2, results="asis"}
 ptotlp = format(round(fit$R_summarypred[1,c(1,4:8)]),big.mark=",")
-pattackrate = format(round(fit$R_summarypred[3,c(1,4:8)],2))
-maxinc = format(round(fit$R_max[c(1,4:8)]),big.mark=",")
+maxinc = format(round(summarise(fit$R_pred,mean=max(mean),`2.5%`=max(`2.5%`),`25%`=max(`25%`),`50%`=max(`50%`),`75%`=max(`75%`),`97.5%`=max(`97.5%`))),big.mark=",")
+peak = round(fit$R_peak[c(1,4:8)])
+end = round(fit$R_end[c(1,4:8)])
 
-mm = rbind(ptotlp,maxinc,pattackrate)
-dimnames(mm)[[1]] = c("Expected total clinical cases","Expected maximal weekly clinical cases","Expected final attack rate")
+mm = rbind(ptotlp,maxinc,peak,end)
+dimnames(mm)[[1]] = c("Epidemic size","Maximal weekly incidence","Week of peak incidence","Week of the end of the period of high epidemic activity")
 dimnames(mm)[[2]] = c("Mean","2.5%","25%","50%","75%","97.5%")
 
 kable(mm,caption="Forecasted indicators.",escape=F)
 
 ```
 
-
-```{r tab3, results="asis"}
-peak = round(fit$R_peak[c(1,4:8)])
-end = round(fit$R_end[c(1,4:8)])
-
-mm = rbind(peak,end)
-dimnames(mm)[[1]] = c("Expected date of peak incidence","Expected date of the end of the epidemic phase")
-dimnames(mm)[[2]] = c("Mean","2.5%","25%","50%","75%","97.5%")
-
-kable(mm,caption="Forecasted dynamics (in weeks after the first reported cases)",escape=F)
-
-```
 
 # References

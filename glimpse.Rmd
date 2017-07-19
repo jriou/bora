@@ -1,0 +1,216 @@
+---
+title: "glimpse"
+author: "Bayesian Outbreak Risk Assessment Tool"
+output: html_document
+---
+
+
+```{r controls, include = FALSE}
+require(ggplot2);require(dplyr);require(tidyr);library(cowplot);library(knitr)
+
+## Set options
+knitr::opts_chunk$set(echo = FALSE,warning = FALSE,message = FALSE)
+options(scipen = 999, stringsAsFactors = FALSE)
+
+## Pull in the data
+load("fit.Rdata")
+```
+
+### Results
+
+***
+#### Settings and methodological aspects
+***
+
+The analysis is based on a time-dependent susceptible-infectious-recovered (TSIR) model composed of two elements: (1) the distribution of the serial interval of the disease; and (2) a statistical model for the generation of observed secondary cases involving two main parameters: the basic reproduction number $R_0$ and the reporting rate $\rho$ (Riou et al, 2017). Fitting this model to weekly incidence data allows the estimation of these two parameters, which in turn will be used to stochastically simulate future incidence. From these simulations, several indicators of direct operational interest are then computed.
+
+***
+#### Diagnostics
+***
+
+The model is fitted using *Stan* 2.15.1, a Bayesian statistical inference package with MCMC sampling (Carpenter et al, 2015). The sampling was based on __`r fit$nchains`__ chains with __`r fit$nit`__ iterations each, 
+including a burn-in of __`r fit$nwarmup`__ iterations, with a thinning ratio of __`r paste0("1:",fit$nthin)`__. A basic approach to detect the most common problems with the MCMC estimation process is to check:
+
+1. that the chains are well mixed after warm-up, which can be assessed visually by examining the *trace plot* of each parameter (Fig. 1A-C);
+
+2. that autocorrelation (i.e. correlation between successive iterations) is low, which indicates a good efficiency of the sampling process (Fig. 1D-F);
+
+3. that the Gelman-Rubin convergence indicator $\hat{R}$ is close to 1 and lower than 1.05 (Fig. 1G and Table 1).
+
+It is also always advisable to interpret the results with regards to the quality of the model fit with regards to the data (Fig. 1H). If no particular issue is detected in the diagnostics, the most common issues with MCMC sampling can generally be dismissed, and the results may be trusted. If any issue arises on the preceding three points, the results should not be trusted. In this case, increasing the number of iterations and the warm-up duration can resolve some situations. Increasing the thinning ratio can also be helpful in case of high autocorrelation.
+
+<br>
+
+<center> <b> <div style="max-width:500px;">
+Figure 1. Post-estimation diagnostics: (A-C) trace plots of the three parameters of the model; (D-F) autocorrelation (AC) plots; (G) Gelman-Rubin Rhat; (H) model fit (mean and 50% and 95% confidence intervals).
+</div> </b> </center>
+
+```{r fig1, fig.height=7, fig.width=11,fig.align="center"}
+f1 = plot_grid(fit$trace1 + scale_colour_discrete(guide=FALSE) + labs(x="Iterations") +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$trace2 + scale_colour_discrete(guide=FALSE) + labs(x="Iterations") +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$trace3 + scale_colour_discrete(guide=FALSE) + labs(x="Iterations") +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               ncol=3,
+               labels=c("A","B","C"))
+
+rhat = as.data.frame(fit$R_summarypars) %>%
+  add_rownames() %>%
+  ggplot(.) +
+  geom_vline(aes(xintercept=c(1,1.05,1.1)),linetype=2,size=.5) +
+  geom_segment(aes(x=1,xend=Rhat,y=rowname,yend=rowname)) +
+  geom_point(aes(x=Rhat,y=rowname),size=2,shape=21,fill="skyblue") +
+  scale_y_discrete(labels=c(expression(phi),expression(R[0]),expression(rho))) +
+  scale_x_continuous(breaks=c(1,1.05,1.1)) +
+  labs(x="Rhat",y="",title=NULL)
+
+
+f2 = plot_grid(fit$acf1 + 
+                 theme_cowplot() +
+                 labs(title=NULL,y=expression(paste("AC  (",R[0],")"))) +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$acf2 + 
+                 theme_cowplot() +
+                 labs(title=NULL,y=expression(paste("AC (",rho,")"))) +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               fit$acf3 + 
+                 theme_cowplot() +
+                 labs(title=NULL,y=expression(paste("AC (",phi,")"))) +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               rhat + 
+                 theme_cowplot() +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               ncol=2,
+               labels=c("D","E","F","G"))
+f3 = plot_grid(f2,
+               ggplot() +
+                 geom_ribbon(data=fit$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.4,fill="skyblue") +
+                 geom_ribbon(data=fit$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="skyblue") +
+                 geom_point(data=fit$data,aes(x=NWEEK,y=NCASES),shape=1,colour="black") +
+                 geom_line(data=fit$R_fit,aes(x=NWEEK,y=mean),size=1) +
+                 labs(x="Weeks",y="N") +
+                 scale_y_continuous(expand=c(0,0),limits=c(0,max(fit$R_fit[["97.5%"]])*1.1)) +
+                 theme_cowplot() +
+                 theme(axis.title=element_text(size=9),
+                       axis.text=element_text(size=8)),
+               labels=c("","H"))
+
+plot_grid(f1,f3,ncol=1,rel_heights = c(1,1.6))
+```
+
+***
+
+#### Parameter estimates and forward simulations
+
+The following table presents the posterior distributions obtained for the three parameters of the model: the reproduction number $R_0$, the reporting rate $\rho$, and the dispersion parameter $\phi$. 
+
+```{r tab1, results="asis"}
+nn = cbind(round(fit$R_summarypars[,c(1,3:9)],1),
+           round(fit$R_summarypars[,c(10)],3))
+dimnames(nn)[[1]] = c("$R_0$","$\\rho$","$\\phi$")
+dimnames(nn)[[2]] = c("Mean","SD","2.5%","25%","50%","75%","97.5%","Eff. n","$\\hat{R}$")
+kable(as.data.frame(nn))
+```
+
+
+
+
+
+The parameters were given prior distributions. Following Bayesian inference principles, these prior distributions were updated according to the provided incidence data. The differences between the prior and the posterior distributions can be assessed in Fig. 2.
+
+<center> <b> <div style="max-width:500px;">
+Figure 2. Posterior distributions for $R_0$ (panel A) and $\\rho$ (panel B). The dashed lines represent the corresponding prior distributions.
+</div> </b> </center>
+
+```{r fig2, fig.height=2, fig.width=4,fig.align="center"}
+dd = rbind(cbind(as.data.frame(do.call("cbind",fit$R_dens_r0[c("x","y")])),type="R0"),
+           cbind(as.data.frame(do.call("cbind",fit$R_dens_rho[c("x","y")])),type="rho"))
+ff = rbind(cbind(r0distr$ff,type="R0"),cbind(rhodistr$ff,type="rho"))
+f1 = ggplot() +
+  geom_ribbon(data=filter(dd,type=="R0"),aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
+  geom_line(data=filter(dd,type=="R0"),aes(x=x,y=y),size=.7) +
+  geom_line(data=filter(ff,type=="R0"),aes(x=x,y=prob),size=.7,linetype=2) +
+  scale_y_continuous(expand=c(0,0)) +
+  labs(title=NULL,x=expression(R[0]),y="Density") +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
+f2 = ggplot() +
+  geom_ribbon(data=filter(dd,type=="rho"),aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
+  geom_line(data=filter(dd,type=="rho"),aes(x=x,y=y),size=.7) +
+  geom_line(data=rhodistr$ff,aes(x=x,y=prob),size=.7,linetype=2) +
+  scale_y_continuous(expand=c(0,0)) +
+  labs(title=NULL,x=expression(rho),y="Density") +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
+plot_grid(f1,f2,labels=c("A","B"))
+```
+
+
+
+
+
+From the posterior distributions of $R_0$, $\rho$ and $\phi$ and observed incidence, the future weekly incidence of the outbreak was forecasted for the  two following years. The forecasts were based on __`r fit$nchains*(fit$nit-fit$nwarmup)`__ stochastic simulations of the epidemic. The mean predicted trajectory as well as the 50% and 95% prediction are presented in Fig. 4.
+
+
+```{r fig4,fig.height=3.5, fig.width=4.5,fig.cap="Predicted course of the epidemic from stochastic simulations (mean, 50\\% and 95\\% prediction intervals)"}
+pathee = rbind(tail(fit$R_fit,1),fit$R_pred)
+linee = filter(pathee,NWEEK==min(NWEEK))
+ggplot() +
+  geom_col(data=fit$data,aes(x=NWEEK,y=NCASES),fill=NA,colour="black",width=1) +
+  
+  geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3,fill="tomato") +
+  geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="tomato") +
+  geom_line(data=pathee,aes(x=NWEEK,y=mean),size=1,colour="tomato") +
+  
+  geom_vline(data=linee,aes(xintercept=NWEEK),size=0.3,linetype=2) +
+  scale_y_continuous(expand=c(0,0) ) +
+  labs(x="Weeks",y="N") +
+  theme_cowplot() +
+  theme(axis.title=element_text(size=9),
+        axis.text=element_text(size=8))
+```
+
+
+##### Public health indicators
+
+Several indicators of direct operationnal value were computed from the simulated epidemic trajectories (Table 2):
+
+* the epidemic size (i.e. the total number of clinical cases during the epidemic);
+
+* the maximal weekly incidence (from the 95% prediction band);
+
+
+In addition were also computed some predictions about the dynamics of the epidemic (with dates expressed as a number of weeks after the first reports):
+
+* the date of peak incidence (i.e. the week with the largest number of clinical cases);
+
+* the date end of the period of high epidemic activity (i.e. defined after __`r fit$w.eoo`__ consecutive weeks under a threshold of __`r fit$n.eoo`__ clinical cases).
+
+
+
+```{r tab2, results="asis"}
+ptotlp = format(round(fit$R_summarypred[1,c(1,4:8)]),big.mark=",")
+maxinc = format(round(summarise(fit$R_pred,mean=max(mean),`2.5%`=max(`2.5%`),`25%`=max(`25%`),`50%`=max(`50%`),`75%`=max(`75%`),`97.5%`=max(`97.5%`))),big.mark=",")
+peak = round(fit$R_peak[c(1,4:8)])
+end = round(fit$R_end[c(1,4:8)])
+
+mm = rbind(ptotlp,maxinc,peak,end)
+dimnames(mm)[[1]] = c("Epidemic size","Maximal weekly incidence","Week of peak incidence","Week of the end of the period of high epidemic activity")
+dimnames(mm)[[2]] = c("Mean","2.5%","25%","50%","75%","97.5%")
+
+kable(mm,caption="Forecasted indicators.",escape=F)
+
+```
+
+
+##### References

@@ -3,20 +3,20 @@ library(ggplot2)
 library(cowplot)
 library(rmarkdown)
 
-fluidPage(theme="simplex.min.css",
-          tags$style(type="text/css",
-                     "label {font-size: 12px;}",
-                     ".recalculating {opacity: 1.0;}"
+fluidPage(includeCSS("www/simplex.css"),
+          titlePanel("Borat - Bayesian Outbreak Risk Assessment Tool"),
+          h5("Improving short- and middle-term forecasts about emerging epidemics by using historical data"),
+          hr(),
+          fluidRow(
+            column(2, tags$h3("Controls"))
           ),
-          tags$h2("Borat - Bayesian Outbreak Risk Assessment Tool"),
-          p("Improving short- and middle-term forecasts about emerging epidemics by using historical data"),
           hr(),
           fluidRow(
             column(2, tags$h4("Import data")),
             column(2, tags$h4("Serial interval")),
             column(2, tags$h4("Prior distribution for the reproduction number")),
             column(2, tags$h4("Prior distribution for the reporting rate")),
-            column(2, tags$h4("Miscellaneous"))
+            column(2, tags$h4("Other"))
           ),
           hr(),
           fluidRow(
@@ -59,7 +59,7 @@ fluidPage(theme="simplex.min.css",
             # Input misc
             column(2,
                    numericInput("popsize","Size of exposed population",min=0,value=NA),
-                   numericInput("n.eoo","Threshold defining the end of the epidemic",value=200),
+                   numericInput("n.eoo","Threshold defining the period of high epidemic activity",value=200),
                    numericInput("w.eoo","Number of weeks above the threshold",value=3)
             )
           ),
@@ -89,15 +89,15 @@ fluidPage(theme="simplex.min.css",
                    selectInput("exsi","or use a prespecified example",choices=c("-","Zika virus (Ae. aegypti, 28°C)","Chikungunya virus (Ae. aegypti, 28°C)"))
             ),
             column(2, 
-                   selectInput("exr0","or use a prespecified example",choices=c("-","Non-informative prior distribution","CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)"))
+                   selectInput("exr0","or use a prespecified example",choices=c("-","Non-informative prior distribution","ZIKV in Martinique (from CHIKV)"))
             ),
             column(2, 
-                   selectInput("exrho","or use a prespecified example",choices=c("-","Non-informative prior distribution","CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)"))
+                   selectInput("exrho","or use a prespecified example",choices=c("-","Non-informative prior distribution","ZIKV in Martinique (from CHIKV)"))
             )
           ),
           hr(),
           fluidRow(
-            column(2, tags$h4("Procedure controls"))
+            column(2, tags$h4("Advanced settings"))
           ),
           hr(),
           fluidRow(
@@ -113,16 +113,25 @@ fluidPage(theme="simplex.min.css",
             column(2, 
                    sliderInput("nthin","Thinning ratio",min=1,max=10,value=1,step=1)
             ),
-            column(2,align="center",
-                   actionButton("gosim","Launch estimation",icon("random"))
+            column(3,align="center",br(),
+                   actionButton("gosim"," \tEstimation",icon("random")),
+                   conditionalPanel(condition="$('html').hasClass('shiny-busy')",
+                                    h6("Computation in progress..."))
             )
           ),
           hr(),
+          # fluidRow(
+          #   column(10,tags$h3("Results"))
+          # ),
+          # hr(),
+          tags$head(tags$style(HTML("
+                               body {
+                                    width: 100% !important;
+                                    max-width: 100% !important;
+                                    }
+                                    
+                                    "))),
           fluidRow(
-            column(10,tags$h4("Results"))
-          ),
-          hr(),
-          fluidRow(
-            column(10,includeHTML("report.html"))
+            column(10,uiOutput(outputId="glimpse"))
           )
 )

@@ -4,12 +4,12 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
   rstan_options(auto_write = TRUE)
   options(mc.cores = parallel::detectCores())
   if(grepl("^darwin",tolower(Sys.info()[["sysname"]]))) {
-    load("compiled_tsir_mac.Rdata") 
+    load("compiled_tsir_mac.Rdata")
   } else if(grepl("^windows",tolower(Sys.info()[["sysname"]]))) {
     load("compiled_tsir_windows.Rdata")
   } else {
     M_ = stan_model(file="TSIR_model.stan",model_name="tsir_stan")
-  } 
+  }
   ResampleThreshold = 1.05
   
   # manage data
@@ -203,10 +203,7 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
     return(which(cumsum(y<n.eoo)==w.eoo))
   }))
   res$R_end = round(c(mean=mean(tmpend),se_mean=sd(tmpend)/length(tmpend),sd=sd(tmpend),quantile(tmpend,probs=c(0.025,0.25,0.5,0.75,0.975)),n_eff=NA,Rhat=NA),2)
-  
-  # render rmarkdown report
   fit = res
   save(fit,file="fit.Rdata")
-  rmarkdown::render("report.Rmd",output_format=c("pdf_document","html_document","word_document"))
   return(res)
 }

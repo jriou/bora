@@ -136,7 +136,7 @@ function(input, output, session) {
       updateSelectInput(session,"r0disttype",selected="Exponential")
       updateNumericInput(session,"r0rate",value=0.5)
     }
-    if(input$exr0=="CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)") {
+    if(input$exr0=="ZIKV in Martinique (from CHIKV)") {
       updateSelectInput(session,"r0disttype",selected="Gamma")
       updateNumericInput(session,"r0mean",value=1.3)
       updateNumericInput(session,"r0sd",value=0.1)
@@ -204,7 +204,7 @@ function(input, output, session) {
       updateNumericInput(session,"rhoshape1",value=1)
       updateNumericInput(session,"rhoshape2",value=1)
     }
-    if(input$exrho=="CHIKV outbreak in Martinique (2013-2015) x difference between ZIKV and CHIKV outbreaks in French Polynesia (2013-2015)") {
+    if(input$exrho=="ZIKV in Martinique (from CHIKV)") {
       updateSelectInput(session,"rhodisttype",selected="Beta")
       updateNumericInput(session,"rhoshape1",value=32)
       updateNumericInput(session,"rhoshape2",value=132)
@@ -240,123 +240,17 @@ function(input, output, session) {
   )
   
   # Run simulations
-  R_ <- eventReactive(input$gosim, {
+  output$glimpse <- eventReactive(input$gosim, {
     source("runmodel.R")
-    runmodel(data=exdata(),
-             pop=popsize(),
-             si=sidistr(),
-             prior_r0=r0distr(),
-             prior_rho=rhodistr(),
-             nchains=input$nchains,nit=input$nit,nwarmup=input$nwarmup,nthin=input$nthin,
-             n.eoo=input$n.eoo,w.eoo=input$w.eoo)
-    
+    # runmodel(data=exdata(),
+    #          pop=popsize(),
+    #          si=sidistr(),
+    #          prior_r0=r0distr(),
+    #          prior_rho=rhodistr(),
+    #          nchains=input$nchains,nit=input$nit,nwarmup=input$nwarmup,nthin=input$nthin,
+    #          n.eoo=input$n.eoo,w.eoo=input$w.eoo)
+    load("fit.Rdata")
+    HTML(markdown::markdownToHTML(knit('glimpse.Rmd', quiet = TRUE)))
   })
   
-  output$plotconv = renderPlot({
-    req(R_())
-    R_()$conv
-  })
-  
-  output$plotfit = renderPlot({
-    req(R_())
-    ggplot() +
-      geom_col(data=R_()$data,aes(x=NWEEK,y=NCASES),fill=NA,colour="black",width=1) +
-      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3) +
-      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3) +
-      geom_line(data=R_()$R_fit,aes(x=NWEEK,y=mean),size=1) +
-      labs(title="Model fit",x="Weeks",y="N") +
-      theme_bw()
-  })
-  
-  output$plotpost = renderPlot({
-    require(cowplot)
-    req(R_(),rhodistr(),r0distr())
-    dd = rbind(cbind(as.data.frame(do.call("cbind",R_()$R_dens_r0[c("x","y")])),type="R0"),
-               cbind(as.data.frame(do.call("cbind",R_()$R_dens_rho[c("x","y")])),type="rho"))
-    ff = rbind(cbind(r0distr()$ff,type="R0"),cbind(rhodistr()$ff,type="rho"))
-    ggplot() +
-      geom_ribbon(data=dd,aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
-      geom_line(data=dd,aes(x=x,y=y),size=.7) +
-      geom_line(data=ff,aes(x=x,y=prob),size=.7,linetype=2) +
-      facet_wrap(~type,scales="free") +
-      labs(title="Posterior distributions of the main parameters (compared to priors)",x="",y="Density") +
-      theme_bw()
-  })
-  
-
-  output$tablepost = renderUI({
-    req(R_())
-    ressum = function(x,digits) {
-      c(mean=format(round(x[1],digits),big.mark=",",nsmall=digits),
-        CI50=paste0("[",format(round(x[5],digits),big.mark=",",nsmall=digits),"; ",format(round(x[7],digits),big.mark=",",nsmall=digits),"]"),
-        CI95=paste0("[",format(round(x[4],digits),big.mark=",",nsmall=digits),"; ",format(round(x[8],digits),big.mark=",",nsmall=digits),"]"),
-        n_eff=format(round(x[9]),big.mark=",",nsmall=0),
-        Rhat=format(round(x[10],2),big.mark=",",nsmall=2))
-    }
-    ss = cbind(c("R_0","\\rho","\\phi"),
-               rbind(ressum(R_()$R_summarypars[1,],1),
-                     ressum(R_()$R_summarypars[2,],2),
-                     ressum(R_()$R_summarypars[3,],1)))
-    dimnames(ss) = list(1:3,
-                        c("Parameter","Mean","50\\%CI","95\\%CI","Eff. N","\\hat{R}"))
-    ss = print(xtable(ss,
-               align=rep("l", ncol(ss)+1),
-               captio=paste("lol")),
-               floating=FALSE, tabular.environment="array", comment=FALSE, print.results=FALSE,
-               sanitize.text.function=function(x) x ,
-               sanitize.colnames.function=function(x) x,
-               include.rownames=FALSE,
-               caption.placement = getOption("xtable.caption.placement", "top"), 
-               caption.width = getOption("xtable.caption.width", NULL))
-    list(withMathJax(HTML(ss)))
-    })
-  
-  
-  output$plotpred = renderPlot({
-    req(R_())
-    pathee = rbind(tail(R_()$R_fit,1),R_()$R_pred)
-    linee = filter(pathee,NWEEK==min(NWEEK))
-    ggplot() +
-      geom_col(data=R_()$data,aes(x=NWEEK,y=NCASES),fill=NA,colour="black",width=1) +
-      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3) +
-      geom_ribbon(data=R_()$R_fit,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3) +
-      geom_line(data=R_()$R_fit,aes(x=NWEEK,y=mean),size=1) +
-      
-      geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3,fill="tomato") +
-      geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="tomato") +
-      geom_line(data=pathee,aes(x=NWEEK,y=mean),size=1,colour="tomato") +
-      
-      geom_vline(data=linee,aes(xintercept=NWEEK),size=0.3,linetype=2) +
-      labs(title="Model fit and predicted course of the epidemic",x="Weeks",y="N") +
-      theme_bw()
-  })
-  
-  output$tablepred = renderUI({
-    req(R_())
-    ressum = function(x,digits) {
-      c(mean=format(round(x[1],digits),big.mark=",",nsmall=digits),
-        CI50=paste0("[",format(round(x[5],digits),big.mark=",",nsmall=digits),"; ",format(round(x[7],digits),big.mark=",",nsmall=digits),"]"),
-        CI95=paste0("[",format(round(x[4],digits),big.mark=",",nsmall=digits),"; ",format(round(x[8],digits),big.mark=",",nsmall=digits),"]")
-        )
-    }
-
-    ss = cbind(c("Total \\;observed \\;cases","Total overall cases","Final attack rate"),
-               rbind(ressum(R_()$R_summarypred[1,],0),
-                     ressum(R_()$R_summarypred[2,],0),
-                     ressum(R_()$R_summarypred[3,],2),
-                     ressum(R_()$R_start,0),
-                     ressum(R_()$R_peak,0),
-                     ressum(R_()$R_end,0)
-                     )
-               )
-    dimnames(ss) = list(1:nrow(ss),
-                        c("Parameter","Mean","50\\%CI","95\\%CI"))
-    ss = print(xtable(ss,
-                      align=rep("l", ncol(ss)+1)),
-               floating=FALSE, tabular.environment="array", comment=FALSE, print.results=FALSE,
-               #sanitize.text.function=function(x) x ,
-               sanitize.colnames.function=function(x) x,
-               include.rownames=FALSE)
-    list(withMathJax(HTML(ss)))
-  })
 }
