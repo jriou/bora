@@ -8,7 +8,7 @@ fluidPage(includeCSS("www/simplex.css"),
           h5("Improving short- and middle-term forecasts about emerging epidemics by using historical data"),
           hr(),
           fluidRow(
-            column(2, tags$h3("Controls"))
+            column(2, tags$h3("Settings"))
           ),
           hr(),
           fluidRow(

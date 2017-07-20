@@ -3,6 +3,7 @@ library(dplyr)
 library(ggplot2)
 library(cowplot)
 library(xtable)
+library(knitr)
 
 function(input, output, session) {
   
@@ -242,14 +243,13 @@ function(input, output, session) {
   # Run simulations
   output$glimpse <- eventReactive(input$gosim, {
     source("runmodel.R")
-    # runmodel(data=exdata(),
-    #          pop=popsize(),
-    #          si=sidistr(),
-    #          prior_r0=r0distr(),
-    #          prior_rho=rhodistr(),
-    #          nchains=input$nchains,nit=input$nit,nwarmup=input$nwarmup,nthin=input$nthin,
-    #          n.eoo=input$n.eoo,w.eoo=input$w.eoo)
-    load("fit.Rdata")
+    runmodel(data=exdata(),
+             pop=popsize(),
+             si=sidistr(),
+             prior_r0=r0distr(),
+             prior_rho=rhodistr(),
+             nchains=input$nchains,nit=input$nit,nwarmup=input$nwarmup,nthin=input$nthin,
+             n.eoo=input$n.eoo,w.eoo=input$w.eoo)
     HTML(markdown::markdownToHTML(knit('glimpse.Rmd', quiet = TRUE)))
   })
   

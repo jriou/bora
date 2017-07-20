@@ -6,7 +6,7 @@ output: html_document
 
 
 ```{r controls, include = FALSE}
-require(ggplot2);require(dplyr);require(tidyr);library(cowplot);library(knitr)
+require(ggplot2);require(dplyr);require(tidyr);library(cowplot);library(knitr);library(htmlTable)
 
 ## Set options
 knitr::opts_chunk$set(echo = FALSE,warning = FALSE,message = FALSE)
@@ -28,8 +28,8 @@ The analysis is based on a time-dependent susceptible-infectious-recovered (TSIR
 #### Diagnostics
 ***
 
-The model is fitted using *Stan* 2.15.1, a Bayesian statistical inference package with MCMC sampling (Carpenter et al, 2015). The sampling was based on __`r fit$nchains`__ chains with __`r fit$nit`__ iterations each, 
-including a burn-in of __`r fit$nwarmup`__ iterations, with a thinning ratio of __`r paste0("1:",fit$nthin)`__. A basic approach to detect the most common problems with the MCMC estimation process is to check:
+The model is fitted using *Stan* 2.15.1, a Bayesian statistical inference package with MCMC sampling (Carpenter et al, 2015). The sampling was based on __`r fit$nchains`__ chains with __`r fit$nit`__ iterations each,
+including a burn-in of __`r fit$nwarmup`__ iterations, with a thinning ratio of __`r paste0("1:",fit$nthin)`__. A basic approach to detect the most common problems with the MCMC estimation process is to check (Gelman et al, 2014):
 
 1. that the chains are well mixed after warm-up, which can be assessed visually by examining the *trace plot* of each parameter (Fig. 1A-C);
 
@@ -69,22 +69,22 @@ rhat = as.data.frame(fit$R_summarypars) %>%
   labs(x="Rhat",y="",title=NULL)
 
 
-f2 = plot_grid(fit$acf1 + 
+f2 = plot_grid(fit$acf1 +
                  theme_cowplot() +
                  labs(title=NULL,y=expression(paste("AC  (",R[0],")"))) +
                  theme(axis.title=element_text(size=9),
                        axis.text=element_text(size=8)),
-               fit$acf2 + 
+               fit$acf2 +
                  theme_cowplot() +
                  labs(title=NULL,y=expression(paste("AC (",rho,")"))) +
                  theme(axis.title=element_text(size=9),
                        axis.text=element_text(size=8)),
-               fit$acf3 + 
+               fit$acf3 +
                  theme_cowplot() +
                  labs(title=NULL,y=expression(paste("AC (",phi,")"))) +
                  theme(axis.title=element_text(size=9),
                        axis.text=element_text(size=8)),
-               rhat + 
+               rhat +
                  theme_cowplot() +
                  theme(axis.title=element_text(size=9),
                        axis.text=element_text(size=8)),
@@ -107,33 +107,21 @@ plot_grid(f1,f3,ncol=1,rel_heights = c(1,1.6))
 ```
 
 ***
+#### Parameter estimates
+***
 
-#### Parameter estimates and forward simulations
+The TSIR model includes two main parameters of interest: the reproduction number $R_0$ and the reporting rate $\rho$ (an additional parameter is $\phi$, the dispersion parameter). The parameters were given prior distributions, then, following Bayesian inference principles, these prior distributions were updated according using incidence data to obtain posterior distributions, which correspond to our current knowledge about the parameters. Eximining the differences between the prior and the posterior distributions allows to understand the respective influence of the prior distribution (that was chosen) and of the incidence data on the results (Fig. 2). Table 1 summarizes the posterior distributions of the parameters, together with the effective number of samples that were used in the estimation, and the Gelman-Rubin convergence indicator $\hat{R}$.
 
-The following table presents the posterior distributions obtained for the three parameters of the model: the reproduction number $R_0$, the reporting rate $\rho$, and the dispersion parameter $\phi$. 
-
-```{r tab1, results="asis"}
-nn = cbind(round(fit$R_summarypars[,c(1,3:9)],1),
-           round(fit$R_summarypars[,c(10)],3))
-dimnames(nn)[[1]] = c("$R_0$","$\\rho$","$\\phi$")
-dimnames(nn)[[2]] = c("Mean","SD","2.5%","25%","50%","75%","97.5%","Eff. n","$\\hat{R}$")
-kable(as.data.frame(nn))
-```
-
-
-
-
-
-The parameters were given prior distributions. Following Bayesian inference principles, these prior distributions were updated according to the provided incidence data. The differences between the prior and the posterior distributions can be assessed in Fig. 2.
+<br>
 
 <center> <b> <div style="max-width:500px;">
 Figure 2. Posterior distributions for $R_0$ (panel A) and $\\rho$ (panel B). The dashed lines represent the corresponding prior distributions.
 </div> </b> </center>
 
-```{r fig2, fig.height=2, fig.width=4,fig.align="center"}
+```{r fig2, fig.height=4, fig.width=9,fig.align="center"}
 dd = rbind(cbind(as.data.frame(do.call("cbind",fit$R_dens_r0[c("x","y")])),type="R0"),
            cbind(as.data.frame(do.call("cbind",fit$R_dens_rho[c("x","y")])),type="rho"))
-ff = rbind(cbind(r0distr$ff,type="R0"),cbind(rhodistr$ff,type="rho"))
+ff = rbind(cbind(fit$prior_r0$ff,type="R0"),cbind(fit$prior_rho$ff,type="rho"))
 f1 = ggplot() +
   geom_ribbon(data=filter(dd,type=="R0"),aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
   geom_line(data=filter(dd,type=="R0"),aes(x=x,y=y),size=.7) +
@@ -146,7 +134,7 @@ f1 = ggplot() +
 f2 = ggplot() +
   geom_ribbon(data=filter(dd,type=="rho"),aes(x=x,ymax=y,ymin=0),alpha=0.7,fill="tomato") +
   geom_line(data=filter(dd,type=="rho"),aes(x=x,y=y),size=.7) +
-  geom_line(data=rhodistr$ff,aes(x=x,y=prob),size=.7,linetype=2) +
+  geom_line(data=fit$prior_rho$ff,aes(x=x,y=prob),size=.7,linetype=2) +
   scale_y_continuous(expand=c(0,0)) +
   labs(title=NULL,x=expression(rho),y="Density") +
   theme_cowplot() +
@@ -158,20 +146,51 @@ plot_grid(f1,f2,labels=c("A","B"))
 
 
 
+<br>
 
-From the posterior distributions of $R_0$, $\rho$ and $\phi$ and observed incidence, the future weekly incidence of the outbreak was forecasted for the  two following years. The forecasts were based on __`r fit$nchains*(fit$nit-fit$nwarmup)`__ stochastic simulations of the epidemic. The mean predicted trajectory as well as the 50% and 95% prediction are presented in Fig. 4.
+<center> <b> <div style="max-width:500px;">
+Table 1. Posterior distributions of the three parameters.
+</div> </b> </center>
+
+<center>
+
+```{r tab1,results="asis"}
+library(htmlTable)
+nn = cbind(round(fit$R_summarypars[,c(1,3:8)],1),
+                           round(fit$R_summarypars[,c(9)],0),
+                           round(fit$R_summarypars[,c(10)],3))
+dimnames(nn)[[1]] = c("$R_0$","$\\rho$","$\\phi$")
+dimnames(nn)[[2]] = c("Mean","SD","2.5%","25%","50%","75%","97.5%","Eff. n","$\\hat{R}$")
+
+htmlTable(nn)
+```
+
+</center>
 
 
-```{r fig4,fig.height=3.5, fig.width=4.5,fig.cap="Predicted course of the epidemic from stochastic simulations (mean, 50\\% and 95\\% prediction intervals)"}
+***
+#### Forward simulations
+***
+
+From the posterior distributions of $R_0$, $\rho$ and $\phi$, the remaining of the epidemic was simulated __`r fit$nchains*(fit$nit-fit$nwarmup)`__  times using a stochastic model mirroring the TSIR model. From the simulations we computed the predictive distribution of the weekly number of future incident cases to be reported by the surveillance system, summarized by a mean trajectory and a trajectory-wise 95% prediction band (Kolsrud, 2017).
+
+<br>
+
+<center> <b> <div style="max-width:500px;">
+Figure 3. Predicted course of the epidemic from stochastic simulations (mean, 50% and 95% prediction intervals)
+</div> </b> 
+
+
+```{r fig4,fig.height=4, fig.width=6,fig.align="center"}
 pathee = rbind(tail(fit$R_fit,1),fit$R_pred)
 linee = filter(pathee,NWEEK==min(NWEEK))
 ggplot() +
   geom_col(data=fit$data,aes(x=NWEEK,y=NCASES),fill=NA,colour="black",width=1) +
-  
+
   geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`25%`,ymax=`75%`),alpha=0.3,fill="tomato") +
   geom_ribbon(data=pathee,aes(x=NWEEK,ymin=`2.5%`,ymax=`97.5%`),alpha=0.3,fill="tomato") +
   geom_line(data=pathee,aes(x=NWEEK,y=mean),size=1,colour="tomato") +
-  
+
   geom_vline(data=linee,aes(xintercept=NWEEK),size=0.3,linetype=2) +
   scale_y_continuous(expand=c(0,0) ) +
   labs(x="Weeks",y="N") +
@@ -180,37 +199,52 @@ ggplot() +
         axis.text=element_text(size=8))
 ```
 
+</center>
 
-##### Public health indicators
+***
+#### Public health indicators
+***
 
-Several indicators of direct operationnal value were computed from the simulated epidemic trajectories (Table 2):
+Parameter estimates and forecasts of the weekly number of clinical cases have limited value to public health decision-makers, as they do not directly translate to disease burden or strains on the healthcare system. Several indicators of direct operationnal value were thus computed from the simulated epidemic trajectories (Table 2):
 
-* the epidemic size (i.e. the total number of clinical cases during the epidemic);
+1. the final epidemic size (i.e. the total number of clinical cases expected during the whole duration of the epidemic); 
 
-* the maximal weekly incidence (from the 95% prediction band);
+2. the maximal of the future weekly incidence (for which the upper bound of the 97.5% prediction interval is of central interest);
 
+3. the date of peak incidence, expressed as a number of weeks after the initial report; 
 
-In addition were also computed some predictions about the dynamics of the epidemic (with dates expressed as a number of weeks after the first reports):
+4. the date of the end of the period of high epidemic activity, also expressed as a number of weeks, and defined after __`r fit$w.eoo`__ consecutive weeks under a threshold of __`r fit$n.eoo`__ clinical cases.
 
-* the date of peak incidence (i.e. the week with the largest number of clinical cases);
+<br>
 
-* the date end of the period of high epidemic activity (i.e. defined after __`r fit$w.eoo`__ consecutive weeks under a threshold of __`r fit$n.eoo`__ clinical cases).
+<center> <b> <div style="max-width:500px;">
+Table 2. Forecasts on four indicators with direct operational value.
+</div> </b> 
 
-
-
-```{r tab2, results="asis"}
+```{r tab2,results="asis"}
 ptotlp = format(round(fit$R_summarypred[1,c(1,4:8)]),big.mark=",")
 maxinc = format(round(summarise(fit$R_pred,mean=max(mean),`2.5%`=max(`2.5%`),`25%`=max(`25%`),`50%`=max(`50%`),`75%`=max(`75%`),`97.5%`=max(`97.5%`))),big.mark=",")
 peak = round(fit$R_peak[c(1,4:8)])
 end = round(fit$R_end[c(1,4:8)])
 
 mm = rbind(ptotlp,maxinc,peak,end)
-dimnames(mm)[[1]] = c("Epidemic size","Maximal weekly incidence","Week of peak incidence","Week of the end of the period of high epidemic activity")
+dimnames(mm)[[1]] = c("Final epidemic size","Maximal weekly incidence","Week of peak incidence","Week of the end of high epidemic activity")
 dimnames(mm)[[2]] = c("Mean","2.5%","25%","50%","75%","97.5%")
 
-kable(mm,caption="Forecasted indicators.",escape=F)
-
+htmlTable(mm)
 ```
 
+</center>
 
-##### References
+***
+#### References
+***
+
+Carpenter B, Gelman A, Hoffman M, Lee D, Goodrich B, Betancourt M, et al. *Stan: a probabilistic programming language.* Journal of Statistical Software. 2015.
+
+Gelman A, Carlin JB, Stern HS, Rubin DB. *Bayesian data analysis. vol. 2.* Chapman & Hall/CRC Boca Raton, FL, USA; 2014.
+
+Kolsrud D. *Time-simultaneous prediction band for a time series.* Journal of Forecasting. 2007;26(3):171–188.
+
+Riou J, Poletto C, Boëlle PY. *A comparative analysis of Chikungunya and Zika transmission.* Epidemics. 2017;19:43–52.
+
