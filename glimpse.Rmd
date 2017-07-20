@@ -19,21 +19,21 @@ load("fit.Rdata")
 ### Results
 
 ***
-#### Settings and methodological aspects
+#### Methodological aspects
 ***
 
-The analysis is based on a time-dependent susceptible-infectious-recovered (TSIR) model composed of two elements: (1) the distribution of the serial interval of the disease; and (2) a statistical model for the generation of observed secondary cases involving two main parameters: the basic reproduction number $R_0$ and the reporting rate $\rho$ (Riou et al, 2017). Fitting this model to weekly incidence data allows the estimation of these two parameters, which in turn will be used to stochastically simulate future incidence. From these simulations, several indicators of direct operational interest are then computed.
+The analysis is based on a time-dependent susceptible-infectious-recovered (TSIR) model composed of two elements: (1) the distribution of the serial interval of the disease; and (2) a statistical model for the generation of observed secondary cases involving two main parameters: the basic reproduction number $R_0$ and the reporting rate $\rho$ (Riou et al, 2017). Fitting this model to weekly incidence data allows the estimation of these two parameters, which in turn will be used to stochastically simulate future incidence. From these simulations, several indicators of direct operational interest are then computed. The model and the simulations are conducted using *Stan* 2.15.1, a Bayesian statistical inference package with MCMC sampling (Carpenter et al, 2015).
 
 ***
 #### Diagnostics
 ***
 
-The model is fitted using *Stan* 2.15.1, a Bayesian statistical inference package with MCMC sampling (Carpenter et al, 2015). The sampling was based on __`r fit$nchains`__ chains with __`r fit$nit`__ iterations each,
+The sampling was based on __`r fit$nchains`__ chains with __`r fit$nit`__ iterations each,
 including a burn-in of __`r fit$nwarmup`__ iterations, with a thinning ratio of __`r paste0("1:",fit$nthin)`__. A basic approach to detect the most common problems with the MCMC estimation process is to check (Gelman et al, 2014):
 
 1. that the chains are well mixed after warm-up, which can be assessed visually by examining the *trace plot* of each parameter (Fig. 1A-C);
 
-2. that autocorrelation (i.e. correlation between successive iterations) is low, which indicates a good efficiency of the sampling process (Fig. 1D-F);
+2. that autocorrelation (i.e. correlation between successive iterations) is low, which indicates a good efficiency of the sampling process. For lags >0, autocorrelation is expected increasingly low (Fig. 1D-F);
 
 3. that the Gelman-Rubin convergence indicator $\hat{R}$ is close to 1 and lower than 1.05 (Fig. 1G and Table 1).
 
