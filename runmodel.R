@@ -3,13 +3,7 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
   require(rstan);require(dplyr);require(rmarkdown)
   rstan_options(auto_write = TRUE)
   options(mc.cores = parallel::detectCores())
-  if(grepl("^darwin",tolower(Sys.info()[["sysname"]]))) {
-    load("compiled_tsir_mac.Rdata")
-  } else if(grepl("^windows",tolower(Sys.info()[["sysname"]]))) {
-    load("compiled_tsir_windows.Rdata")
-  } else {
-    M_ = stan_model(file="TSIR_model.stan",model_name="tsir_stan")
-  }
+  load("compiled_tsir.Rdata")
   ResampleThreshold = 1.05
   
   # manage data
