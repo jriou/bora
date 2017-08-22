@@ -51,50 +51,30 @@ runmodel = function(data,pop,si,prior_r0,prior_rho,nchains,nit,nwarmup,nthin,n.e
   if(prior_r0$type=="Exponential") {
     dl$P_R0 = c(prior_r0$rate,0)
     dl$P_R0_type = 1
-    if(prior_rho$type=="Beta") {
-      dl$P_rho_type = 1
-      dl$P_rho = c(prior_rho$shape1,prior_rho$shape2)
-    }
-    if(prior_rho$type=="Uniform") {
-      dl$P_rho_type = 2
-      dl$P_rho = c(prior_rho$min,prior_rho$max)
-    }
   }
   if(prior_r0$type=="Uniform") {
     dl$P_R0_type = 2
     dl$P_R0 = c(prior_r0$min,prior_r0$max)
-    if(prior_rho$type=="Beta") {
-      dl$P_rho_type = 1
-      dl$P_rho = c(prior_rho$shape1,prior_rho$shape2)
-    }
-    if(prior_rho$type=="Uniform") {
-      dl$P_rho_type = 2
-      dl$P_rho = c(prior_rho$min,prior_rho$max)
-    }
   }
   if(prior_r0$type=="Normal") {
     dl$P_R0_type = 3
     dl$P_R0 = c(prior_r0$mean,prior_r0$sd)
-    if(prior_rho$type=="Beta") {
-      dl$P_rho_type = 1
-      dl$P_rho = c(prior_rho$shape1,prior_rho$shape2)
-    }
-    if(prior_rho$type=="Uniform") {
-      dl$P_rho_type = 2
-      dl$P_rho = c(prior_rho$min,prior_rho$max)
-    }
   }
   if(prior_r0$type=="Gamma") {
     dl$P_R0_type = 4
     dl$P_R0 = c(prior_r0$mean,prior_r0$sd)
-    if(prior_rho$type=="Beta") {
-      dl$P_rho_type = 1
-      dl$P_rho = c(prior_rho$shape1,prior_rho$shape2)
-    }
-    if(prior_rho$type=="Uniform") {
-      dl$P_rho_type = 2
-      dl$P_rho = c(prior_rho$min,prior_rho$max)
-    }
+  }
+  if(prior_rho$type=="Beta") {
+    dl$P_rho_type = 1
+    dl$P_rho = c(prior_rho$shape1,prior_rho$shape2)
+  }
+  if(prior_rho$type=="Uniform") {
+    dl$P_rho_type = 2
+    dl$P_rho = c(prior_rho$min,prior_rho$max)
+  }
+  if(prior_rho$type=="Gamma") {
+    dl$P_rho_type = 3
+    dl$P_rho = c(prior_rho$mean,prior_rho$sd)
   }
 
   # run model

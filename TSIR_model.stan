@@ -8,8 +8,8 @@ data {
   vector[siL] siW; // discretized serial interval distribution
 
   // prior settings
-  int P_R0_type; // 1=exponential; 2=uniform; 3=normal; 4=gamma; 0=hyperprior
-  int P_rho_type; // 1=beta; 2=uniform; 0=hyperprior
+  int P_R0_type; // 1=exponential; 2=uniform; 3=normal; 4=gamma
+  int P_rho_type; // 1=beta; 2=uniform; 3=gamma
   real<lower=0> P_R0[2]; 
   real<lower=0> P_rho[2];
 
@@ -64,6 +64,7 @@ model {
   // prior for rho 
   if(P_rho_type==1) rho ~ beta(P_rho[1],P_rho[2]);
   if(P_rho_type==2) rho ~ uniform(P_rho[1],P_rho[2]);
+  if(P_rho_type==3) rho ~ gamma(P_rho[1],P_rho[2]);
 
   // prior for phi
   phi ~ cauchy(0,2.5);

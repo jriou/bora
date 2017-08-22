@@ -3,9 +3,11 @@ library(ggplot2)
 library(cowplot)
 library(rmarkdown)
 
+source("examples_library.R")
+
 fluidPage(includeCSS("www/simplex.css"),
-          titlePanel("Borat - Bayesian Outbreak Risk Assessment Tool"),
-          h5("Improving short- and middle-term forecasts about emerging epidemics by using historical data"),
+          titlePanel("Epicast"),
+          h5("Forecasting current epidemics using historical data"),
           hr(),
           fluidRow(
             column(2, tags$h3("Settings"))
@@ -48,7 +50,10 @@ fluidPage(includeCSS("www/simplex.css"),
                                     numericInput("r0rate","Rate",min=0,max=15,value=NA,step=0.1))
             ),
             # Input prior on rho
-            column(2,selectInput("rhodisttype","Distribution type",choices=c("-","Uniform","Beta")),
+            column(2,selectInput("rhodisttype","Distribution type",choices=c("-","Uniform","Beta","Gamma")),
+                   conditionalPanel(condition="output.rhomeansd==true",
+                                    numericInput("rhomean","Mean",min=0,max=1,value=NA,step=0.1),
+                                    numericInput("rhosd","Standard deviation",min=0,max=1,value=NA,step=0.1)),
                    conditionalPanel(condition="output.rhounif==true",
                                     numericInput("rhomin","Minimum",min=0,max=1,value=NA,step=0.05),
                                     numericInput("rhomax","Maximum",min=0,max=1,value=NA,step=0.05)),
@@ -59,8 +64,7 @@ fluidPage(includeCSS("www/simplex.css"),
             # Input misc
             column(2,
                    numericInput("popsize","Size of exposed population",min=0,value=NA),
-                   numericInput("n.eoo","Threshold defining the period of high epidemic activity",value=200),
-                   numericInput("w.eoo","Number of weeks above the threshold",value=3)
+                   numericInput("n.eoo","Threshold defining high autochtonous transmission",value=NA)
             )
           ),
           br(),
@@ -83,16 +87,16 @@ fluidPage(includeCSS("www/simplex.css"),
           # provided examples
           fluidRow(
             column(2, 
-                   selectInput("exdata","or use a prespecified example",choices=c("-","Zika virus in Martinique, 2015-2017 (W1-8)"))
+                   selectInput("exdata","or use an example from the library",choices=c("-",lapply(data_lib,function(x) names(x))))
             ),
             column(2, 
-                   selectInput("exsi","or use a prespecified example",choices=c("-","Zika virus (Ae. aegypti, 28°C)","Chikungunya virus (Ae. aegypti, 28°C)"))
+                   selectInput("exsi","or use an example from the library",choices=c("-",lapply(si_lib,function(x) names(x))))
             ),
             column(2, 
-                   selectInput("exr0","or use a prespecified example",choices=c("-","Non-informative prior distribution","ZIKV in Martinique (from CHIKV)"))
+                   selectInput("exr0","or use an example from the library",choices=c("-","Non-informative",lapply(r0_lib,function(x) names(x))))            
             ),
             column(2, 
-                   selectInput("exrho","or use a prespecified example",choices=c("-","Non-informative prior distribution","ZIKV in Martinique (from CHIKV)"))
+                   selectInput("exrho","or use an example from the library",choices=c("-","Non-informative",lapply(rho_lib,function(x) names(x))))            
             )
           ),
           hr(),
@@ -120,10 +124,6 @@ fluidPage(includeCSS("www/simplex.css"),
             )
           ),
           hr(),
-          # fluidRow(
-          #   column(10,tags$h3("Results"))
-          # ),
-          # hr(),
           tags$head(tags$style(HTML("
                                body {
                                     width: 100% !important;

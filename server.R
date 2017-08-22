@@ -7,41 +7,48 @@ library(knitr)
 
 function(input, output, session) {
   
-  # Data management on imported file
+  # Imported file
   csvdata = reactive({
     req(input$epidcurve)
     x = unlist(unname(read.csv(input$epidcurve$datapath)))
     data.frame(NCASES=x,NWEEK=1:length(x))
   })
   
+  
+  # Data from library
   exdata = reactive({
     req(input$exdata)
-    if(input$exdata=="Zika virus in Martinique, 2015-2017 (W1-8)") data.frame(NCASES=c(57,119,145,456,619,1069,1629,1183),NWEEK=1:8)
-  })
-  
-  popsize = reactive({
-    req(input$popsize)
-    input$popsize
-  })
-  
-  datew1 <- reactive({
-    req(input$datew1)
-    input$datew1
+    dd = NULL
+    for(i in 1:length(data_lib)) {
+      tmp = data_lib[[i]][[input$exdata]]
+      if(length(tmp)>0) dd = data.frame(NCASES=tmp$data,NWEEK=1:length(tmp$data))
+    }
+    return(dd)
   })
   
   observe({
-    if(input$exdata=="Zika virus in Martinique, 2015-2017 (W1-8)") {
-      updateNumericInput(session,"popsize",value=385000)
-      updateDateInput(session,"datew1",value=as.Date("2015-12-20"))
+    req(input$exdata)
+    for(i in 1:length(data_lib)) {
+      tmp = data_lib[[i]][[input$exdata]]
+      if(length(tmp)>0) {
+        updateNumericInput(session,"popsize",value=tmp$popsize)
+        updateNumericInput(session,"n.eoo",value=tmp$n.eoo)
+      }
     }
   })
   
+  # Data management
   ec = reactive({
     if(!is.null(exdata())) {
       exdata()
     } else {
       csvdata()
     }
+  })
+  
+  popsize = reactive({
+    req(input$popsize)
+    input$popsize
   })
   
   # Plot epidemic curve
@@ -53,7 +60,6 @@ function(input, output, session) {
   )
   
   # Controls on serial interval distribution
-  
   output$siunif <- reactive({
     req(input$sidisttype)
     input$sidisttype=="Uniform"
@@ -67,15 +73,16 @@ function(input, output, session) {
   outputOptions(output, "simeansd", suspendWhenHidden = FALSE) 
   
   observe({
-    if(input$exsi=="Zika virus (Ae. aegypti, 28°C)") {
-      updateSelectInput(session,"sidisttype",selected="Gamma")
-      updateNumericInput(session,"simean",value=2.5)
-      updateNumericInput(session,"sisd",value=0.7)
-    }
-    if(input$exsi=="Chikungunya virus (Ae. aegypti, 28°C)") {
-      updateSelectInput(session,"sidisttype",selected="Gamma")
-      updateNumericInput(session,"simean",value=1.6)
-      updateNumericInput(session,"sisd",value=0.6)
+    req(input$exsi)
+    for(i in 1:length(data_lib)) {
+      tmp = si_lib[[i]][[input$exsi]]
+      if(length(tmp)>0) {
+        updateSelectInput(session,"sidisttype",selected=tmp$type)
+        if(tmp$type=="Gamma") {
+          updateNumericInput(session,"simean",value=tmp$mean)
+          updateNumericInput(session,"sisd",value=tmp$sd)
+        }
+      }
     }
   })
   
@@ -109,7 +116,7 @@ function(input, output, session) {
       ggplot(sidistr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
       geom_line(aes(x=x,y=prob),size=0.7) +
-      labs(x="Weeks",y="Density") +
+      labs(x="Weeks",y="PDF") +
       theme_bw()
   )
   
@@ -133,14 +140,16 @@ function(input, output, session) {
   outputOptions(output, "r0exp", suspendWhenHidden = FALSE) 
   
   observe({
-    if(input$exr0=="Non-informative prior distribution") {
-      updateSelectInput(session,"r0disttype",selected="Exponential")
-      updateNumericInput(session,"r0rate",value=0.5)
-    }
-    if(input$exr0=="ZIKV in Martinique (from CHIKV)") {
-      updateSelectInput(session,"r0disttype",selected="Gamma")
-      updateNumericInput(session,"r0mean",value=1.3)
-      updateNumericInput(session,"r0sd",value=0.1)
+    req(input$exr0)
+    for(i in 1:length(data_lib)) {
+      tmp = r0_lib[[i]][[input$exr0]]
+      if(length(tmp)>0) {
+        updateSelectInput(session,"r0disttype",selected=tmp$type)
+        if(tmp$type=="Gamma") {
+          updateNumericInput(session,"r0mean",value=tmp$mean)
+          updateNumericInput(session,"r0sd",value=tmp$sd)
+        }
+      }
     }
   })
   
@@ -150,26 +159,26 @@ function(input, output, session) {
     req(input$r0disttype)
     if(input$r0disttype=="Uniform") {
       req(input$r0min,input$r0max)
-      ff = data.frame(x=seq(0,input$r0max*1.1,by=0.001))
+      ff = data.frame(x=seq(0,max(3,input$r0max*1.1),by=0.001))
       ff$prob = dunif(ff$x,min=input$r0min,max=input$r0max)
       return(list(type="Uniform",min=input$r0min,max=input$r0max,ff=ff))
     }
     if(input$r0disttype=="Exponential") {
       req(input$r0rate)
-      ff = data.frame(x=seq(0,2.5/input$r0rate,by=0.001))
+      ff = data.frame(x=seq(0,max(3,2.5/input$r0rate),by=0.001))
       ff$prob = dexp(ff$x,rate=input$r0rate)
       return(list(type="Exponential",rate=input$r0rate,ff=ff))
     }
     if(input$r0disttype=="Normal") {
       req(input$r0mean,input$r0sd)
-      ff = data.frame(x=seq(0,input$r0mean+5*input$r0sd,by=0.001))
+      ff = data.frame(x=seq(0,max(3,input$r0mean+5*input$r0sd),by=0.001))
       ff$prob = dnorm(ff$x,mean=input$r0mean,sd=input$r0sd)
       ff$prob = ff$prob/sum(ff$prob)
       return(list(type="Normal",mean=input$r0mean,sd=input$r0sd,ff=ff))
     }
     if(input$r0disttype=="Gamma") {
       req(input$r0mean,input$r0sd)
-      ff = data.frame(x=seq(0,input$r0mean+5*input$r0sd,by=0.001))
+      ff = data.frame(x=seq(0,max(3,input$r0mean+5*input$r0sd),by=0.001))
       ff$prob = dgamma(ff$x,rate=input$r0mean/(input$r0sd^2),shape=(input$r0mean^2)/(input$r0sd^2))
       return(list(type="Gamma",mean=input$r0mean,sd=input$r0sd,rate=input$r0mean/(input$r0sd^2),shape=(input$r0mean^2)/(input$r0sd^2),ff=ff))
     }
@@ -181,7 +190,7 @@ function(input, output, session) {
       ggplot(r0distr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
       geom_line(aes(x=x,y=prob),size=0.7) +
-      labs(x=expression(R[0]),y="Density") +
+      labs(x=expression(R[0]),y="PDF") +
       theme_bw()
   )
   
@@ -199,16 +208,27 @@ function(input, output, session) {
   })
   outputOptions(output, "rhobetad", suspendWhenHidden = FALSE) 
   
+  output$rhomeansd <- reactive({
+    req(input$rhodisttype)
+    input$rhodisttype %in% c("Normal","Gamma")
+  })
+  outputOptions(output, "rhomeansd", suspendWhenHidden = FALSE) 
+  
   observe({
-    if(input$exrho=="Non-informative prior distribution") {
-      updateSelectInput(session,"rhodisttype",selected="Beta")
-      updateNumericInput(session,"rhoshape1",value=1)
-      updateNumericInput(session,"rhoshape2",value=1)
-    }
-    if(input$exrho=="ZIKV in Martinique (from CHIKV)") {
-      updateSelectInput(session,"rhodisttype",selected="Beta")
-      updateNumericInput(session,"rhoshape1",value=32)
-      updateNumericInput(session,"rhoshape2",value=132)
+    req(input$exrho)
+    for(i in 1:length(data_lib)) {
+      tmp = rho_lib[[i]][[input$exrho]]
+      if(length(tmp)>0) {
+        updateSelectInput(session,"rhodisttype",selected=tmp$type)
+        if(tmp$type=="Gamma") {
+          updateNumericInput(session,"rhomean",value=tmp$mean)
+          updateNumericInput(session,"rhosd",value=tmp$sd)
+        }
+        if(tmp$type=="Beta") {
+          updateNumericInput(session,"rhoshape1",value=tmp$shape1)
+          updateNumericInput(session,"rhoshape2",value=tmp$shape2)
+        }
+      }
     }
   })
   
@@ -228,6 +248,12 @@ function(input, output, session) {
       ff$prob = dbeta(ff$x,shape1=input$rhoshape1,shape2=input$rhoshape2)
       return(list(type="Beta",shape1=input$rhoshape1,shape2=input$rhoshape2,ff=ff))
     }
+    if(input$rhodisttype=="Gamma") {
+      req(input$rhomean,input$rhosd)
+      ff = data.frame(x=seq(0,1,by=0.001))
+      ff$prob = dgamma(ff$x,rate=input$rhomean/(input$rhosd^2),shape=(input$rhomean^2)/(input$rhosd^2))
+      return(list(type="Gamma",mean=input$rhomean,sd=input$rhosd,rate=input$rhomean/(input$rhosd^2),shape=(input$rhomean^2)/(input$rhosd^2),ff=ff))
+    }
   })
   
   # Plot prior distribution on rho
@@ -236,7 +262,7 @@ function(input, output, session) {
       ggplot(rhodistr()$ff) +
       geom_ribbon(aes(x=x,ymax=prob),ymin=0,fill="grey",alpha=0.6) +
       geom_line(aes(x=x,y=prob),size=.7) +
-      labs(x=expression(rho),y="Density") +
+      labs(x=expression(rho),y="PDF") +
       theme_bw()
   )
   
